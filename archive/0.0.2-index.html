@@ -1,0 +1,498 @@
+<!-- Konetik index.html v0.0.2 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Konetik</title>
+  <meta name="description" content="A text-only Nostr client with Nostr-to-Hive bridging">
+  <meta name="theme-color" content="#ffffff">
+  <!-- <link rel="manifest" href="/manifest.json"> --> <!-- Paused -->
+  <style>
+    body { font-family: monospace; max-width: 600px; margin: 0 auto; padding: 10px; }
+    section, div { margin: 10px 0; }
+    input, textarea, select { width: 100%; padding: 5px; }
+    button { padding: 5px 10px; margin: 5px 0; }
+    #menu, #note-modal, #reply-modal, #about-modal, #sleep-overlay, #post-info-modal { display: none; }
+    #sleep-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; text-align: center; padding-top: 50%; }
+    #post-info-modal { position: fixed; top: 20%; left: 10%; right: 10%; background: #fff; border: 1px solid #000; padding: 20px; text-align: center; }
+    .error { color: red; }
+    .status { font-size: 0.9em; }
+    .info { font-size: 0.8em; color: #555; }
+  </style>
+  <script src="https://unpkg.com/nostr-tools@2.7.2/lib/nostr.bundle.js"></script>
+  <script id="dhive-script" src="/dhive.js" defer></script>
+  <script id="dhive-fallback" defer></script> <!-- Populated dynamically if primary fails -->
+</head>
+<body>
+  <header>
+    <h1>Konetik</h1>
+    <p>a text-only nostr client with hive bridging</p>
+  </header>
+
+  <!-- Login Section -->
+  <section id="login-section">
+    <h2>login</h2>
+    <nav>
+      <a href="#join">join nostr</a> | <a href="#about">about Konetik</a>
+    </nav>
+    <p>Login securely with Nostr Connect (under construction):</p>
+    <button onclick="loginWithNostrConnect()">login with nostr connect</button>
+    <p>Or login with a Nostr browser extension (recommended):</p>
+    <button onclick="loginWithExtension()">login with extension</button>
+    <p>Or enter your nsec key to login (not recommended):</p>
+    <input type="password" id="nsec-input" placeholder="nsec...">
+    <button onclick="toggleNsecVisibility()">👁️</button>
+    <button onclick="loginWithNsec()">login with nsec</button>
+    <p class="info">Your Nostr keys stay safe in your browser and are never stored or shared.</p>
+    <p id="login-error" class="error"></p>
+  </section>
+
+  <!-- Hive Setup Section -->
+  <section id="hive-setup-section" style="display: none;">
+    <h2>hive bridge setup</h2>
+    <p>Enter your Hive credentials to enable Nostr-to-Hive bridging:</p>
+    <input type="text" id="hive-username" placeholder="Hive username">
+    <input type="password" id="hive-posting-key" placeholder="Hive Posting Key (starts with 5)">
+    <button onclick="saveHiveCredentials()">save credentials</button>
+    <p class="info">Your Hive Posting Key is processed in your browser only and not stored or sent to servers.</p>
+    <p id="hive-error" class="error"></p>
+    <p><label><input type="checkbox" id="bridge-toggle" checked onchange="toggleBridge()"> <span id="bridge-label">Disable Nostr-to-Hive bridge</span></label></p>
+    <p id="bridge-status" class="status">Bridge: Active</p>
+  </section>
+
+  <!-- Main App Section -->
+  <section id="app-section" style="display: none;">
+    <nav>
+      <button onclick="openNoteModal()">+ note</button>
+      <button onclick="toggleMenu()">☰</button>
+      <div id="menu">
+        <a href="#about" onclick="openAbout()">about Konetik</a>
+        <div>
+          auto-sleep timer:
+          <select onchange="setSleepTimer(this.value)">
+            <option value="5">5m</option>
+            <option value="10">10m</option>
+            <option value="15">15m</option>
+            <option value="30">30m</option>
+            <option value="60">1h</option>
+            <option value="off">off</option>
+          </select>
+        </div>
+        <button onclick="logout()">logout</button>
+      </div>
+    </nav>
+    <div id="feed-controls">
+      <button onclick="refreshFeed()">refresh feed</button>
+      <button onclick="reloadPage()">reload page</button>
+    </div>
+    <div id="feed"></div>
+  </section>
+
+  <!-- Note Modal -->
+  <div id="note-modal">
+    <h2>+ note</h2>
+    <textarea id="note-content" placeholder="What's on your mind?"></textarea>
+    <p id="note-error" class="error"></p>
+    <button onclick="cancelNote()">cancel</button>
+    <button onclick="postNote()">post</button>
+  </div>
+
+  <!-- Reply Modal -->
+  <div id="reply-modal">
+    <h2>reply</h2>
+    <textarea id="reply-content" placeholder="Your reply..."></textarea>
+    <p id="reply-error" class="error"></p>
+    <button onclick="cancelReply()">cancel</button>
+    <button onclick="postReply()">post</button>
+  </div>
+
+  <!-- About Modal -->
+  <div id="about-modal">
+    <h2>About Konetik</h2>
+    <p>Konetik is a text-only Nostr client with Nostr-to-Hive bridging for low-resource devices and poor internet.</p>
+    <p>Features:</p>
+    <ul>
+      <li>Text-only interface</li>
+      <li>Basic Nostr functionality (posts, follows, reply)</li>
+      <li>Nostr-to-Hive bridging for Snaps/Waves</li>
+      <li>Installable PWA (coming soon)</li>
+      <li>Sleep mode to save resources</li>
+    </ul>
+    <p>Your keys are kept secure in your browser and never stored or shared with servers.</p>
+    <p>Made with ❤️ by crrdlx. Find me on Nostr: npub1qpduf...a082j</p>
+    <button onclick="closeAbout()">close</button>
+  </div>
+
+  <!-- Post Info Modal -->
+  <div id="post-info-modal">
+    <h2>Post Status</h2>
+    <p id="post-info-message"></p>
+    <button onclick="closePostInfoModal()">close</button>
+  </div>
+
+  <!-- Sleep Mode Overlay -->
+  <div id="sleep-overlay">
+    <p onclick="wakeApp()">asleep (tap to wake)</p>
+  </div>
+
+  <script>
+    // Handle dhive loading
+    let dhive = null;
+    let hiveClient = null;
+    const dhiveScript = document.getElementById('dhive-script');
+    const dhiveFallback = document.getElementById('dhive-fallback');
+    dhiveScript.onload = () => {
+      dhive = window.dhive;
+      if (dhive) {
+        hiveClient = new dhive.Client('https://api.hive.blog');
+        console.log('dhive loaded from primary source (/dhive.js)');
+      } else {
+        console.error('dhive failed to attach to window.dhive');
+        loadDhiveFallback();
+      }
+    };
+    dhiveScript.onerror = () => {
+      console.error('Failed to load dhive from primary source (/dhive.js)');
+      loadDhiveFallback();
+    };
+
+    function loadDhiveFallback() {
+      console.log('Attempting dhive fallback from jsdelivr');
+      dhiveFallback.src = 'https://cdn.jsdelivr.net/npm/@hiveio/dhive@1.3.0/dist/dhive.js';
+      dhiveFallback.onload = () => {
+        dhive = window.dhive;
+        if (dhive) {
+          hiveClient = new dhive.Client('https://api.hive.blog');
+          console.log('dhive loaded from fallback');
+        } else {
+          console.error('dhive fallback failed to attach to window.dhive');
+          document.getElementById('hive-error').textContent = 'Hive library failed to load. Bridging disabled.';
+        }
+      };
+      dhiveFallback.onerror = () => {
+        console.error('Failed to load dhive from fallback');
+        document.getElementById('hive-error').textContent = 'Hive library failed to load. Bridging disabled.';
+      };
+    }
+
+    // Core variables
+    const relays = ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.snort.social'];
+    let nostrPubkey = null;
+    let hiveCredentials = null;
+    let bridgeEnabled = true; // Default to active
+    let postQueue = [];
+    let nsec = null; // Temporary, unencrypted
+    let lastHivePostTime = 0;
+    let dailySnapCount = 0;
+    let lastSnapDay = new Date().toDateString();
+    let frontEndIndex = 0;
+    const frontEnds = ['snaps', 'waves'];
+    const FIVE_MINUTES_MS = 5 * 60 * 1000;
+    const MAX_SHORTFORM_PER_DAY = 12;
+
+    // Validate Hive posting key
+    function validateHiveKey(key) {
+      if (!key || typeof key !== 'string') return false;
+      if (!key.startsWith('5') || key.length < 48 || key.length > 52) {
+        alert('Invalid Hive Posting Key. Please use your posting key (starts with 5). Other keys (e.g., active, owner, memo) are not supported.');
+        return false;
+      }
+      try {
+        dhive.PrivateKey.fromString(key); // Throws if invalid WIF
+        return true;
+      } catch (error) {
+        alert('Invalid Hive Posting Key format. Please check and try again.');
+        return false;
+      }
+    }
+
+    // Login functions
+    async function loginWithExtension() {
+      const errorEl = document.getElementById('login-error');
+      errorEl.textContent = '';
+      if (window.nostr) {
+        try {
+          nostrPubkey = await window.nostr.getPublicKey();
+          showApp();
+        } catch (error) {
+          errorEl.textContent = 'Extension login failed: ' + error.message;
+        }
+      } else {
+        errorEl.textContent = 'Please install a Nostr extension (e.g., Alby, Nos2x)';
+      }
+    }
+
+    async function loginWithNostrConnect() {
+      alert('Nostr Connect login under construction.');
+      // TODO: Implement NIP-46
+    }
+
+    async function loginWithNsec() {
+      const errorEl = document.getElementById('login-error');
+      errorEl.textContent = '';
+      const nsecInput = document.getElementById('nsec-input').value;
+      if (nsecInput.startsWith('nsec')) {
+        try {
+          nsec = nsecInput; // TODO: Encrypt and store in IndexedDB
+          nostrPubkey = NostrTools.getPublicKey(NostrTools.nip19.decode(nsecInput).data);
+          showApp();
+        } catch (error) {
+          errorEl.textContent = 'Invalid nsec key: ' + error.message;
+        }
+      } else {
+        errorEl.textContent = 'Invalid nsec key format';
+      }
+    }
+
+    function toggleNsecVisibility() {
+      const input = document.getElementById('nsec-input');
+      input.type = input.type === 'password' ? 'text' : 'password';
+    }
+
+    function showApp() {
+      document.getElementById('login-section').style.display = 'none';
+      document.getElementById('hive-setup-section').style.display = 'block';
+      document.getElementById('app-section').style.display = 'block';
+    }
+
+    // Hive setup
+    async function saveHiveCredentials() {
+      const errorEl = document.getElementById('hive-error');
+      errorEl.textContent = '';
+      const username = document.getElementById('hive-username').value;
+      const postingKey = document.getElementById('hive-posting-key').value;
+      if (!username || !postingKey) {
+        errorEl.textContent = 'Please enter both Hive username and Posting Key';
+        return;
+      }
+      if (!hiveClient) {
+        errorEl.textContent = 'Hive library not loaded. Cannot save credentials.';
+        return;
+      }
+      if (!validateHiveKey(postingKey)) {
+        errorEl.textContent = 'Invalid Hive Posting Key';
+        return;
+      }
+      // TODO: Encrypt and store in IndexedDB
+      hiveCredentials = { username, postingKey };
+      errorEl.textContent = 'Credentials saved (unencrypted, for testing)';
+      if (bridgeEnabled) processQueue();
+    }
+
+    function toggleBridge() {
+      bridgeEnabled = document.getElementById('bridge-toggle').checked;
+      document.getElementById('bridge-label').textContent = bridgeEnabled ? 'Disable Nostr-to-Hive bridge' : 'Enable Nostr-to-Hive bridge';
+      document.getElementById('bridge-status').textContent = `Bridge: ${bridgeEnabled ? 'Active' : 'Inactive'}${!hiveClient ? ' (Hive unavailable)' : ''}`;
+      if (bridgeEnabled) processQueue();
+    }
+
+    // Container detection
+    async function getActiveContainer(frontEnd) {
+      if (!hiveClient) throw new Error('Hive client not initialized');
+      const query = {
+        tag: frontEnd === 'snaps' ? 'peak.snaps' : 'ecency.waves',
+        limit: 1
+      };
+      try {
+        console.log(`Fetching ${frontEnd} container...`);
+        const [post] = await hiveClient.database.getDiscussions('blog', query);
+        if (!post || post.author !== (frontEnd === 'snaps' ? 'peak.snaps' : 'ecency.waves')) {
+          console.warn(`No valid ${frontEnd} container found`);
+          return null;
+        }
+        console.log(`Found ${frontEnd} container: ${post.permlink}`);
+        return post.permlink;
+      } catch (error) {
+        console.error(`Error fetching ${frontEnd} container:`, error.message);
+        return null;
+      }
+    }
+
+    // Reset daily counts
+    function resetDailyCounts() {
+      const today = new Date().toDateString();
+      if (today !== lastSnapDay) {
+        dailySnapCount = 0;
+        lastSnapDay = today;
+        console.log('Reset daily snap count');
+      }
+    }
+
+    // Post info modal
+    function showPostInfoModal(message) {
+      document.getElementById('post-info-message').textContent = message;
+      document.getElementById('post-info-modal').style.display = 'block';
+      setTimeout(closePostInfoModal, 3000); // Auto-close after 3s
+    }
+
+    function closePostInfoModal() {
+      document.getElementById('post-info-modal').style.display = 'none';
+      document.getElementById('post-info-message').textContent = '';
+    }
+
+    // Note posting
+    async function postNote() {
+      const content = document.getElementById('note-content').value;
+      const errorEl = document.getElementById('note-error');
+      errorEl.textContent = '';
+      if (!content) {
+        errorEl.textContent = 'Please enter note content';
+        return;
+      }
+      const event = {
+        kind: 1,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [['t', 'hostr']],
+        content,
+        pubkey: nostrPubkey
+      };
+      try {
+        let signedEvent;
+        if (window.nostr) {
+          signedEvent = await window.nostr.signEvent(event);
+        } else if (nsec) {
+          signedEvent = NostrTools.finalizeEvent(event, NostrTools.nip19.decode(nsec).data);
+        } else {
+          throw new Error('No signing method available');
+        }
+        const pool = new NostrTools.SimplePool();
+        await pool.publish(relays, signedEvent);
+        let message = 'Note broadcasted to Nostr';
+        if (bridgeEnabled && hiveCredentials && hiveClient) {
+          postQueue.push({ content, eventId: signedEvent.id, kind: 1 });
+          processQueue();
+          message += ' and queued for Hive bridging';
+        } else if (bridgeEnabled && !hiveClient) {
+          message += ' (Hive bridging unavailable)';
+          errorEl.textContent = 'Cannot bridge: Hive library not loaded';
+        } else if (bridgeEnabled && !hiveCredentials) {
+          message += ' (Hive credentials missing)';
+          errorEl.textContent = 'Cannot bridge: Hive credentials missing';
+        }
+        showPostInfoModal(message);
+        closeNoteModal();
+      } catch (error) {
+        errorEl.textContent = 'Failed to post: ' + error.message;
+      }
+    }
+
+    // Queue processing for Hive
+    async function processQueue() {
+      if (!bridgeEnabled || postQueue.length === 0 || !hiveCredentials || !hiveClient) {
+        document.getElementById('bridge-status').textContent = `Bridge: Inactive (queue: ${postQueue.length})${!hiveClient ? ' (Hive unavailable)' : !hiveCredentials ? ' (credentials missing)' : ''}`;
+        return;
+      }
+      resetDailyCounts();
+      if (dailySnapCount >= MAX_SHORTFORM_PER_DAY) {
+        document.getElementById('bridge-status').textContent = `Bridge: Daily limit reached (${MAX_SHORTFORM_PER_DAY})`;
+        setTimeout(processQueue, 24 * 60 * 60 * 1000);
+        return;
+      }
+      const now = Date.now();
+      if (now - lastHivePostTime < FIVE_MINUTES_MS) {
+        const waitTime = FIVE_MINUTES_MS - (now - lastHivePostTime);
+        document.getElementById('bridge-status').textContent = `Bridge: Waiting ${Math.ceil(waitTime/1000)}s (queue: ${postQueue.length})`;
+        setTimeout(processQueue, waitTime);
+        return;
+      }
+      const post = postQueue.shift();
+      const permlink = `konetik-${frontEnds[frontEndIndex]}-${Math.random().toString(36).substring(2)}`;
+      console.log(`Processing post to ${frontEnds[frontEndIndex]}: ${post.eventId}`);
+      try {
+        const containerPermlink = await getActiveContainer(frontEnds[frontEndIndex]);
+        if (!containerPermlink) {
+          console.warn(`No ${frontEnds[frontEndIndex]} container found`);
+          postQueue.unshift(post);
+          document.getElementById('bridge-status').textContent = `Bridge: No ${frontEnds[frontEndIndex]} container (queue: ${postQueue.length})`;
+          setTimeout(processQueue, 2 * 60 * 1000);
+          return;
+        }
+        const body = `${post.content}\n\nBridged via Konetik v0.0.2, view original on Nostr (https://njump.me/${post.eventId}).`;
+        const postOp = {
+          parent_author: frontEnds[frontEndIndex] === 'snaps' ? 'peak.snaps' : 'ecency.waves',
+          parent_permlink: containerPermlink,
+          author: hiveCredentials.username,
+          permlink,
+          title: '',
+          body,
+          json_metadata: JSON.stringify({ tags: ['hostr', `hostr-${frontEnds[frontEndIndex]}`], app: `konetik-${frontEnds[frontEndIndex]}/0.0.2` })
+        };
+        console.log(`Posting to Hive: ${permlink}`);
+        await hiveClient.broadcast.comment(postOp, dhive.PrivateKey.fromString(hiveCredentials.postingKey));
+        dailySnapCount++;
+        lastHivePostTime = now;
+        frontEndIndex = (frontEndIndex + 1) % frontEnds.length;
+        document.getElementById('bridge-status').textContent = `Bridge: Posted to ${frontEnds[frontEndIndex === 0 ? 1 : 0]} (queue: ${postQueue.length})`;
+        console.log(`Posted to ${frontEnds[frontEndIndex === 0 ? 1 : 0]}: ${permlink}`);
+      } catch (error) {
+        console.error('Error posting to Hive:', error.message);
+        postQueue.unshift(post);
+        document.getElementById('bridge-status').textContent = `Bridge: Error posting (queue: ${postQueue.length})`;
+        setTimeout(processQueue, 2 * 60 * 1000);
+      }
+      if (postQueue.length > 0) setTimeout(processQueue, 100);
+    }
+
+    // UI interactions
+    function openNoteModal() {
+      document.getElementById('note-modal').style.display = 'block';
+    }
+    function closeNoteModal() {
+      document.getElementById('note-modal').style.display = 'none';
+      document.getElementById('note-content').value = '';
+      document.getElementById('note-error').textContent = '';
+    }
+    function cancelNote() {
+      closeNoteModal();
+    }
+    function toggleMenu() {
+      const menu = document.getElementById('menu');
+      menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+    }
+    function openAbout() {
+      document.getElementById('about-modal').style.display = 'block';
+    }
+    function closeAbout() {
+      document.getElementById('about-modal').style.display = 'none';
+    }
+    function refreshFeed() {
+      alert('Feed refresh not implemented');
+    }
+    function reloadPage() {
+      window.location.reload();
+    }
+    function setSleepTimer(value) {
+      alert('Sleep timer set to ' + value + ' (not implemented)');
+    }
+    function wakeApp() {
+      document.getElementById('sleep-overlay').style.display = 'none';
+    }
+    function logout() {
+      nostrPubkey = null;
+      hiveCredentials = null;
+      nsec = null;
+      bridgeEnabled = true; // Reset to default
+      postQueue = [];
+      document.getElementById('login-section').style.display = 'block';
+      document.getElementById('hive-setup-section').style.display = 'none';
+      document.getElementById('app-section').style.display = 'none';
+      document.getElementById('bridge-status').textContent = 'Bridge: Active';
+      document.getElementById('bridge-toggle').checked = true;
+      document.getElementById('bridge-label').textContent = 'Disable Nostr-to-Hive bridge';
+    }
+    function openReplyModal() {
+      document.getElementById('reply-modal').style.display = 'block';
+    }
+    function closeReplyModal() {
+      document.getElementById('reply-modal').style.display = 'none';
+    }
+    function cancelReply() {
+      closeReplyModal();
+    }
+    function postReply() {
+      alert('Reply posting not implemented');
+      closeReplyModal();
+    }
+  </script>
+<!-- Konetik index.html v0.0.2 -->

@@ -1,0 +1,1357 @@
+<!-- konetik index.html v0.0.26 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>konetik</title>
+    <meta name="description" content="A text-only Nostr client with Nostr-to-Hive bridging">
+    <meta name="theme-color" content="#ffffff">
+    <link rel="icon" href="/favicon.ico">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <script id="dhive-script" src="https://cdn.jsdelivr.net/npm/@hiveio/dhive@1.3.0/dist/dhive.js"></script>
+    <script id="dhive-fallback"></script>
+    <script src="https://unpkg.com/nostr-tools@2.7.2/lib/nostr.bundle.js"></script>
+    <style>
+        body { font-family: monospace; max-width: 600px; margin: 0 auto; padding: 10px; }
+        header { text-align: center; }
+        section, div { margin: 10px 0; }
+        input, textarea, select { width: 100%; padding: 5px; }
+        textarea#note-content { height: 6em; }
+        button { padding: 5px 10px; margin: 5px 0; }
+        h1 { font-family: 'Press Start 2P', monospace; color: cornflowerblue; font-size: 16px; }
+        header p { font-family: 'Press Start 2P', monospace; color: #999; font-size: 12px; }
+        #menu, #menu-overlay, #note-modal, #reply-modal, #about-modal, #security-modal, #hive-setup-modal, #join-hive-modal, #sleep-overlay, #post-info-modal { display: none; }
+        #menu, #about-modal, #security-modal, #hive-setup-modal, #join-hive-modal { position: fixed; top: 20%; left: 10%; right: 10%; background: #fff; border: 1px solid #000; padding: 20px; text-align: left; z-index: 1000; }
+        #menu-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; }
+        #sleep-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; text-align: center; padding-top: 50%; }
+        /* Subtle yellow sleep overlay */
+        #sleep-overlay {
+          background: rgba(255,255,0,0.12) !important;
+          color: #333;
+        }
+        #post-info-modal { position: fixed; top: 20%; left: 10%; right: 10%; background: #fff; border: 1px solid #000; padding: 20px; text-align: center; }
+        .error { color: red; }
+        .status { font-size: 0.9em; }
+        .info { font-size: 0.8em; color: #555; }
+        input[type="password"] { -webkit-text-security: disc; text-security: disc; }
+        #menu a, #menu div, #menu button { display: block; margin: 10px 0; }
+        /* Golden + note button from nostxtr */
+        .new-note-button {
+          background-color: #E6B800;
+          color: white;
+          border: none;
+          padding: 6px 12px;
+          border-radius: 5px;
+          cursor: pointer;
+          font-size: 0.9em;
+          transition: background-color 0.3s;
+          margin: 0;
+          display: inline-block;
+          width: auto;
+          text-transform: lowercase;
+          box-shadow: 0 2px 4px rgba(230,184,0,0.08);
+        }
+        .new-note-button:hover {
+          background-color: #D4A800;
+        }
+    </style>
+</head>
+<body>
+    <div id="sleep-banner" style="display:none;width:100vw;height:38px;background:#ffe066;color:#222;font-weight:bold;text-align:center;line-height:38px;font-size:1em;box-shadow:0 2px 8px rgba(0,0,0,0.08);cursor:pointer;">asleep (tap to wake)</div>
+    <header>
+        <h1>konetik</h1>
+        <p>nostr-hive kinetic connect</p>
+    </header>
+
+    <!-- Login Section -->
+    <section id="login-section">
+        <h2>login to nostr</h2>
+        <nav>
+            <a href="#about" id="about-link">about konetik</a> | <a href="#security" id="security-home-link">security</a> | <a href="https://nstart.me" target="_blank" rel="noopener noreferrer">join nostr</a> | <a href="#join-hive" id="join-hive-link">join hive</a>
+        </nav>
+        <p>Login securely with Nostr Connect (under construction):</p>
+        <button id="login-connect-btn">login with nostr connect</button>
+        <p>Or login with a Nostr browser extension (recommended):</p>
+        <button id="login-extension-btn">login with nostr extension</button>
+        <p>Or enter your nsec key to login (not recommended):</p>
+        <input type="password" id="nsec-input" placeholder="nsec...">
+        <button id="nsec-visibility-btn">👁️</button>
+        <p class="info">Your Nostr keys are stored in your browser. Optional encryption available (add passphrase below for extra security).</p>
+        <input type="password" id="nsec-passphrase" placeholder="Optional passphrase for encryption">
+        <button id="nsec-passphrase-visibility-btn">👁️</button>
+        <button id="login-nsec-btn">login with nsec</button>
+        <p id="login-error" class="error"></p>
+    </section>
+
+    <!-- Main App Section -->
+    <section id="app-section" style="display: none;">
+        <p id="login-status" class="status"></p>
+        <p><label><input type="checkbox" id="bridge-toggle" checked> <span id="bridge-label">Disable Nostr-to-Hive bridge</span></label></p>
+        <p id="bridge-status" class="status">Bridge: Active</p>
+        <nav>
+            <button id="note-btn" class="new-note-button">+ note</button>
+            <button id="menu-btn">☰</button>
+            <div id="menu-overlay"></div>
+            <div id="menu">
+                <h2>menu</h2>
+                <a href="#about" id="about-link">about konetik</a>
+                <a href="#security" id="security-link">security</a>
+                <a href="#hive-setup" id="hive-setup-link">manage hive credentials</a>
+                <div>
+                    auto-sleep timer:
+                    <select id="sleep-timer">
+                        <option value="5">5m</option>
+                        <option value="10">10m</option>
+                        <option value="15">15m</option>
+                        <option value="30">30m</option>
+                        <option value="60">1h</option>
+                        <option value="off">off</option>
+                    </select>
+                </div>
+                <button id="logout-btn">logout</button>
+                <button id="close-menu-btn">close</button>
+            </div>
+        </nav>
+        <div id="feed-controls">
+            <button id="refresh-btn">refresh feed</button>
+            <button id="reload-btn">reload page</button>
+        </div>
+        <div id="feed"></div>
+    </section>
+
+    <!-- Note Modal -->
+    <div id="note-modal">
+        <h2>+ note</h2>
+        <textarea id="note-content" placeholder="What's on your mind?"></textarea>
+        <p id="note-error" class="error"></p>
+        <button id="cancel-note-btn">cancel</button>
+        <button id="post-note-btn">post</button>
+    </div>
+
+    <!-- Reply Modal -->
+    <div id="reply-modal">
+        <h2>reply</h2>
+        <textarea id="reply-content" placeholder="Your reply..."></textarea>
+        <p id="reply-error" class="error"></p>
+        <button id="cancel-reply-btn">cancel</button>
+        <button id="post-reply-btn">post</button>
+    </div>
+
+    <!-- About Modal -->
+    <div id="about-modal">
+        <h2>about konetik</h2>
+        <p>konetik (pronounced kun-NET-tik) is a basic, text-only, PWA for posting to Nostr and auto-bridging to the Hive blockchain.</p>
+        <p>Power-bridgers can auto-bridge both directions, Nostr-to-Hive and Hive-to-Nostr, and can also post both short form or long form notes. See <a href="https://github.com/crrdlx/hostr" target="_blank" rel="noopener noreferrer">Hostr</a> for details.</p>
+        <p>Features:</p>
+        <ul>
+            <li>Text-only interface</li>
+            <li>Basic Nostr functionality (posts, follows, reply)</li>
+            <li>Nostr-to-Hive bridging for Snaps/Waves</li>
+            <li>Installable PWA</li>
+            <li>Sleep mode to save resources/data</li>
+            <li>Your keys never leave the browser; they're encrypted if a passphrase is used</li>
+        </ul>
+        <p>Made with ❤️ by <a href="https://linktr.ee/crrdlx" target="_blank" rel="noopener noreferrer">crrdlx</a>.</p>
+        <p>Find me on Nostr: <a href="https://njump.me/npub1qpdufhjpel94srm3ett2azgf49m9dp3n5nm2j0rt0l2mlmc3ux3qza082j" target="_blank" rel="noopener noreferrer">npub1qpduf...a082j</a></p>
+        <button id="close-about-btn">close</button>
+    </div>
+
+    <!-- Security Modal -->
+    <div id="security-modal">
+        <h2>security</h2>
+        <p>Your private keys (Nostr nsec and Hive posting key) are stored locally in your browser's IndexedDB. If you provide a passphrase, they are encrypted using AES-GCM. Keys never leave your browser and are never sent to any server. All operations (signing, posting, etc.) occur in your browser.</p>
+        <button id="close-security-btn">close</button>
+    </div>
+
+    <!-- Hive Setup Modal -->
+    <div id="hive-setup-modal">
+        <h2>hive bridge setup</h2>
+        <p>You can post to Nostr now. However, credentials are needed to enable Nostr-to-Hive bridging. Not on Hive? <a href="#join-hive" id="join-hive-from-setup-link">Click here for options</a>.</p>
+        <input type="text" id="hive-username" placeholder="Hive username">
+        <input type="password" id="hive-posting-key" placeholder="Hive Posting Key (starts with 5)">
+        <button id="hive-posting-key-visibility-btn">👁️</button>
+        <p class="info">Your Hive Posting Key is stored in your browser. Optional encryption available (add passphrase below for extra security).</p>
+        <input type="password" id="hive-passphrase" placeholder="Optional passphrase for encryption">
+        <button id="hive-passphrase-visibility-btn">👁️</button>
+        <p id="hive-error" class="error"></p>
+        <button id="close-hive-btn">close</button>
+        <button id="save-hive-btn">save</button>
+    </div>
+
+    <!-- Join Hive Modal -->
+    <div id="join-hive-modal">
+        <h2>join hive</h2>
+        <p>You can see sign-up options for Hive at <a href="https://signup.hive.io" target="_blank" rel="noopener noreferrer">https://signup.hive.io</a>. Some options are free, others are not. I (<a href="https://linktr.ee/crrdlx" target="_blank" rel="noopener noreferrer">crrdlx</a>) have some free "VIP tickets" to sign up with and you are welcome to use one if you wish, see <a href="https://crrdlx.vercel.app/hive-vip-ticket.html" target="_blank" rel="noopener noreferrer">https://crrdlx.vercel.app/hive-vip-ticket.html</a>. If the tickets there are already spent, contact me and I'll get you set up.</p>
+        <button id="close-join-hive-btn">close</button>
+    </div>
+
+    <!-- Post Info Modal -->
+    <div id="post-info-modal">
+        <h2>Post Status</h2>
+        <p id="post-info-message"></p>
+        <button id="close-post-info-btn">close</button>
+    </div>
+
+    <!-- Sleep Mode Overlay -->
+    <div id="sleep-banner" style="display:none;width:100vw;height:38px;background:#ffe066;color:#222;font-weight:bold;text-align:center;line-height:38px;font-size:1em;box-shadow:0 2px 8px rgba(0,0,0,0.08);cursor:pointer;">asleep (tap to wake)</div>
+
+    <!-- Version Footer -->
+    <footer>
+        <p class="info">konetik v0.0.26</p>
+    </footer>
+
+    <button id="sleep-toggle" style="position:fixed;top:12px;left:16px;z-index:1201;min-width:64px;height:32px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:15px;box-shadow:0 2px 8px rgba(0,0,0,0.08);border:none;outline:none;cursor:pointer;padding:0 10px;gap:4px;"></button>
+    <div id="notif-circle" style="position:fixed;top:16px;right:16px;z-index:1200;"></div>
+    <div id="notif-alert" style="display:none;position:fixed;top:70px;left:50%;transform:translateX(-50%);background:#27ae60;color:#fff;padding:10px 24px;border-radius:8px;font-size:1em;z-index:1201;box-shadow:0 2px 8px rgba(39,174,96,0.12);font-family:monospace;"></div>
+
+    <script>
+        // konetik index.html v0.0.26 -->
+        // Core variables
+        const relays = [
+            'wss://relay.damus.io',
+            'wss://relay.primal.net',
+            'wss://relay.nostr.wirednet.jp',
+            'wss://purplepag.es'
+        ];
+        let nostrPubkey = null;
+        let hiveCredentials = null;
+        let bridgeEnabled = true;
+        let postQueue = [];
+        let nsec = null;
+        let sessionPassphrase = null;
+        let lastHivePostTime = 0;
+        let dailySnapCount = 0;
+        let lastSnapDay = new Date().toDateString();
+        let frontEndIndex = 0;
+        // Load frontEndIndex from localStorage if present
+        if (localStorage.getItem('frontEndIndex') !== null) {
+            const idx = parseInt(localStorage.getItem('frontEndIndex'), 10);
+            if (!isNaN(idx) && idx >= 0 && idx < 2) frontEndIndex = idx;
+        }
+        const frontEnds = ['snaps', 'waves'];
+        const FIVE_MINUTES_MS = 5 * 60 * 1000;
+        const MAX_SHORTFORM_PER_DAY = 12;
+
+        // Sleep/Awake toggle logic
+        let isAwake = true;
+        function updateSleepUI() {
+            const sleepBanner = document.getElementById('sleep-banner');
+            const header = document.querySelector('header');
+            const appSection = document.getElementById('app-section');
+            const loginSection = document.getElementById('login-section');
+            if (isAwake) {
+                sleepBanner.style.display = 'none';
+                if (header) header.style.marginTop = '';
+                if (appSection) appSection.style.marginTop = '';
+                if (loginSection) loginSection.style.marginTop = '';
+                setupNoteListener();
+            } else {
+                sleepBanner.style.display = 'block';
+                if (header) header.style.marginTop = '38px';
+                if (appSection) appSection.style.marginTop = '38px';
+                if (loginSection) loginSection.style.marginTop = '38px';
+                teardownNoteListener();
+            }
+            updateSleepToggleUI();
+        }
+        function updateSleepToggleUI() {
+            const btn = document.getElementById('sleep-toggle');
+            if (!btn) return;
+            btn.innerHTML = isAwake ? '<span style="font-size:18px;">☀️</span> <span style="font-size:13px;">awake</span>' : '<span style="font-size:18px;">🌙</span> <span style="font-size:13px;">asleep</span>';
+            btn.title = isAwake ? 'awake (click to sleep)' : 'asleep (click to wake)';
+            btn.style.background = isAwake ? '#4CAF50' : '#f5f5f5';
+            btn.style.color = isAwake ? 'white' : '#666';
+            btn.style.minWidth = '64px';
+            btn.style.height = '32px';
+            btn.style.borderRadius = '16px';
+            btn.style.display = 'flex';
+            btn.style.alignItems = 'center';
+            btn.style.justifyContent = 'center';
+            btn.style.fontSize = '15px';
+            btn.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)';
+            btn.style.position = 'fixed';
+            btn.style.top = '12px';
+            btn.style.left = '16px';
+            btn.style.zIndex = '1201';
+            btn.style.border = 'none';
+            btn.style.outline = 'none';
+            btn.style.cursor = 'pointer';
+            btn.style.padding = '0 10px';
+            btn.style.gap = '4px';
+        }
+        function toggleSleepState() {
+            isAwake = !isAwake;
+            updateSleepUI();
+        }
+        function wakeApp() {
+            isAwake = true;
+            updateSleepUI();
+        }
+        // Add a toggle button to the header
+        window.addEventListener('DOMContentLoaded', () => {
+            const btn = document.getElementById('sleep-toggle');
+            if (btn) btn.onclick = () => { toggleSleepState(); };
+            updateSleepUI();
+            const sleepBanner = document.getElementById('sleep-banner');
+            if (sleepBanner) sleepBanner.onclick = wakeApp;
+        });
+
+        // Login functions
+        async function loginWithExtension() {
+            const errorEl = document.getElementById('login-error');
+            errorEl.textContent = '';
+            console.log('loginWithExtension: window.nostr exists?', !!window.nostr);
+            if (window.nostr) {
+                try {
+                    nostrPubkey = await window.nostr.getPublicKey();
+                    console.log('loginWithExtension: got pubkey', nostrPubkey);
+                    await updateLoginStatus();
+                    await showApp();
+                } catch (error) {
+                    console.error('loginWithExtension: error', error);
+                    errorEl.textContent = 'Extension login failed: ' + error.message;
+                }
+            } else {
+                console.log('loginWithExtension: no window.nostr');
+                errorEl.textContent = 'Please install a Nostr extension (e.g., Alby, Nos2x)';
+            }
+        }
+
+        async function loginWithNostrConnect() {
+            alert('Nostr Connect login under construction.');
+            // TODO: Implement NIP-46
+        }
+
+        async function loginWithNsec() {
+            const errorEl = document.getElementById('login-error');
+            errorEl.textContent = '';
+            const nsecInput = document.getElementById('nsec-input').value;
+            const passphrase = document.getElementById('nsec-passphrase').value || null;
+            if (!nsecInput) {
+                errorEl.textContent = 'Please enter nsec key';
+                return;
+            }
+            if (nsecInput.startsWith('nsec')) {
+                try {
+                    nsec = nsecInput;
+                    nostrPubkey = NostrTools.getPublicKey(NostrTools.nip19.decode(nsecInput).data);
+                    sessionPassphrase = passphrase;
+                    await saveToIndexedDB('nsec', nsecInput, passphrase);
+                    errorEl.textContent = passphrase ? 'Nostr key encrypted and stored securely' : 'Nostr key stored unencrypted (use passphrase for extra security)';
+                    const hiveData = await loadFromIndexedDB('hive', passphrase);
+                    if (hiveData) {
+                        hiveCredentials = hiveData;
+                        document.getElementById('hive-error').textContent = 'Hive credentials loaded';
+                        updateBridgeStatus();
+                    }
+                    await updateLoginStatus();
+                    await showApp();
+                } catch (error) {
+                    console.error('Nsec login error:', error);
+                    errorEl.textContent = 'Invalid nsec key or storage failed: ' + error.message;
+                }
+            } else {
+                errorEl.textContent = 'Invalid nsec key format';
+            }
+        }
+
+        async function updateLoginStatus() {
+            const statusEl = document.getElementById('login-status');
+            let displayName = '';
+            let isClosed = false;
+            try {
+                const pool = new NostrTools.SimplePool();
+                const activeRelays = [];
+                for (const relay of relays) {
+                    const connected = await tryConnect(pool, relay);
+                    if (connected) activeRelays.push(relay);
+                }
+                console.log('Active relays:', activeRelays);
+                if (activeRelays.length === 0) {
+                    throw new Error('No relays available');
+                }
+                const sub = pool.subscribeMany(
+                    activeRelays,
+                    [{ kinds: [0], authors: [nostrPubkey] }],
+                    {
+                        onevent(event) {
+                            try {
+                                const metadata = JSON.parse(event.content);
+                                displayName = metadata.display_name || metadata.name || '';
+                                if (displayName && !isClosed) {
+                                    isClosed = true;
+                                    statusEl.textContent = `Logged in on Nostr as: ${displayName}`;
+                                    pool.close(activeRelays);
+                                }
+                            } catch (e) {
+                                console.error('Failed to parse metadata:', e);
+                            }
+                        },
+                        oneose() {
+                            if (!displayName && !isClosed) {
+                                isClosed = true;
+                                const npub = NostrTools.nip19.npubEncode(nostrPubkey);
+                                const prefix = npub.slice(5, 9);
+                                const suffix = npub.slice(-4);
+                                statusEl.textContent = `Logged in on Nostr as: npub1${prefix}-${suffix}`;
+                                pool.close(activeRelays);
+                            }
+                        }
+                    }
+                );
+                setTimeout(() => {
+                    if (!displayName && !isClosed) {
+                        isClosed = true;
+                        const npub = NostrTools.nip19.npubEncode(nostrPubkey);
+                        const prefix = npub.slice(5, 9);
+                        const suffix = npub.slice(-4);
+                        statusEl.textContent = `Logged in on Nostr as: npub1${prefix}-${suffix}`;
+                        pool.close(activeRelays);
+                    }
+                }, 10000);
+            } catch (error) {
+                console.error('Failed to fetch username:', error);
+                const npub = NostrTools.nip19.npubEncode(nostrPubkey);
+                const prefix = npub.slice(5, 9);
+                const suffix = npub.slice(-4);
+                statusEl.textContent = `Logged in on Nostr as: npub1${prefix}-${suffix}`;
+            }
+        }
+
+        async function tryConnect(pool, relay, maxRetries = 3) {
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    await pool.ensureRelay(relay);
+                    console.log(`Connected to ${relay}`);
+                    return true;
+                } catch (e) {
+                    console.warn(`Retry ${i+1}/${maxRetries} for ${relay}: ${e.message}`);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+            console.error(`Failed to connect to ${relay} after ${maxRetries} attempts`);
+            return false;
+        }
+
+        function toggleNsecVisibility() {
+            const input = document.getElementById('nsec-input');
+            input.type = input.type === 'password' ? 'text' : 'password';
+        }
+
+        function toggleNsecPassphraseVisibility() {
+            const input = document.getElementById('nsec-passphrase');
+            input.type = input.type === 'password' ? 'text' : 'password';
+        }
+
+        function toggleHivePassphraseVisibility() {
+            const input = document.getElementById('hive-passphrase');
+            input.type = input.type === 'password' ? 'text' : 'password';
+        }
+
+        function toggleHivePostingKeyVisibility() {
+            const input = document.getElementById('hive-posting-key');
+            input.type = input.type === 'password' ? 'text' : 'password';
+        }
+
+        // IndexedDB setup
+        async function saveToIndexedDB(type, data, passphrase = null) {
+            const db = await new Promise((resolve, reject) => {
+                const request = indexedDB.open('konetik', 1);
+                request.onupgradeneeded = () => {
+                    request.result.createObjectStore('credentials', { keyPath: 'type' });
+                };
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+            for (let i = 0; i < 3; i++) {
+                try {
+                    const tx = db.transaction(['credentials'], 'readwrite');
+                    const store = tx.objectStore('credentials');
+                    let storeData = { type, data };
+                    if (passphrase) {
+                        const enc = new TextEncoder();
+                        const key = await crypto.subtle.importKey('raw', enc.encode(passphrase), 'HKDF', false, ['deriveKey']);
+                        const derivedKey = await crypto.subtle.deriveKey(
+                            { name: 'HKDF', salt: enc.encode('konetik'), info: enc.encode('auth'), hash: 'SHA-256' },
+                            key, { name: 'AES-GCM', length: 256 }, true, ['encrypt']
+                        );
+                        const iv = crypto.getRandomValues(new Uint8Array(12));
+                        const encrypted = await crypto.subtle.encrypt(
+                            { name: 'AES-GCM', iv },
+                            derivedKey,
+                            enc.encode(JSON.stringify(data))
+                        );
+                        storeData = {
+                            type,
+                            iv: btoa(String.fromCharCode(...iv)),
+                            encrypted: btoa(String.fromCharCode(...new Uint8Array(encrypted)))
+                        };
+                    }
+                    const request = store.put(storeData);
+                    await new Promise((resolve, reject) => {
+                        request.onsuccess = () => resolve();
+                        request.onerror = () => reject(request.error);
+                        tx.onerror = () => reject(tx.error);
+                    });
+                    db.close();
+                    return;
+                } catch (error) {
+                    console.warn(`Retry ${i+1}/3 for saveToIndexedDB: ${error.message}`);
+                    if (i === 2) {
+                        db.close();
+                        throw error;
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            }
+        }
+
+        async function loadFromIndexedDB(type, passphrase = null) {
+            try {
+                const db = await new Promise((resolve, reject) => {
+                    const request = indexedDB.open('konetik', 1);
+                    request.onupgradeneeded = () => {
+                        request.result.createObjectStore('credentials', { keyPath: 'type' });
+                    };
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+                const tx = db.transaction(['credentials'], 'readonly');
+                const store = tx.objectStore('credentials');
+                const request = store.get(type);
+                const data = await new Promise((resolve, reject) => {
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+                db.close();
+                if (!data) return null;
+                if (!data.data) {
+                    if (!passphrase) return null;
+                    const enc = new TextEncoder();
+                    const key = await crypto.subtle.importKey('raw', enc.encode(passphrase), 'HKDF', false, ['deriveKey']);
+                    const derivedKey = await crypto.subtle.deriveKey(
+                        { name: 'HKDF', salt: enc.encode('konetik'), info: enc.encode('auth'), hash: 'SHA-256' },
+                        key, { name: 'AES-GCM', length: 256 }, true, ['decrypt']
+                    );
+                    const decrypted = await crypto.subtle.decrypt(
+                        { name: 'AES-GCM', iv: new Uint8Array(atob(data.iv).split('').map(c => c.charCodeAt(0))) },
+                        derivedKey,
+                        new Uint8Array(atob(data.encrypted).split('').map(c => c.charCodeAt(0)))
+                    );
+                    return JSON.parse(new TextDecoder().decode(decrypted));
+                }
+                return data.data;
+            } catch (error) {
+                console.error(`Failed to load ${type} from IndexedDB:`, error);
+                return null;
+            }
+        }
+
+        // Validate Hive posting key
+        function validateHiveKey(key) {
+            if (!key || typeof key !== 'string') return false;
+            if (!key.startsWith('5') || key.length < 48 || key.length > 52) {
+                alert('Invalid Hive Posting Key. Must start with 5 and be 48-52 characters long.');
+                return false;
+            }
+            try {
+                dhive.PrivateKey.fromString(key);
+                return true;
+            } catch (error) {
+                alert('Invalid Hive Posting Key format. Please check and try again.');
+                return false;
+            }
+        }
+
+        async function showApp() {
+            document.getElementById('login-section').style.display = 'none';
+            document.getElementById('app-section').style.display = 'block';
+            await initHiveClient();
+            updateBridgeStatus();
+            if (!hiveCredentials) {
+                hiveCredentials = await loadFromIndexedDB('hive', sessionPassphrase);
+                if (hiveCredentials) {
+                    document.getElementById('hive-error').textContent = 'Hive credentials loaded';
+                    updateBridgeStatus();
+                } else {
+                    openHiveSetup();
+                }
+            }
+            if (isAwake) setupNoteListener();
+        }
+
+        function updateBridgeStatus() {
+            const bridgeStatus = document.getElementById('bridge-status');
+            let status = `Bridge: ${bridgeEnabled && hiveCredentials && hiveClient ? 'Active' : 'Inactive'} (queue: ${postQueue.length})`;
+            if (!hiveClient) {
+                status += ' (Hive unavailable)';
+            } else if (!hiveCredentials) {
+                status += ' (<a href="#" id="add-hive-credentials-link" style="color: #007bff; text-decoration: underline; cursor: pointer;">credentials missing</a>)';
+            }
+            bridgeStatus.innerHTML = status;
+            // Add event listener for the link if present
+            const link = document.getElementById('add-hive-credentials-link');
+            if (link) {
+                link.onclick = function(e) { e.preventDefault(); openHiveSetup(); };
+            }
+        }
+
+        // Hive setup
+        async function saveHiveCredentials() {
+            const errorEl = document.getElementById('hive-error');
+            errorEl.textContent = '';
+            const username = document.getElementById('hive-username').value;
+            const postingKey = document.getElementById('hive-posting-key').value;
+            const passphrase = document.getElementById('hive-passphrase').value || null;
+            if (!username || !postingKey) {
+                errorEl.textContent = 'Please enter Hive username and Posting Key';
+                return;
+            }
+            if (!hiveClient) {
+                await initHiveClient();
+                if (!hiveClient) {
+                    errorEl.textContent = 'Hive library not loaded. Cannot save credentials.';
+                    updateBridgeStatus();
+                    return;
+                }
+            }
+            if (!validateHiveKey(postingKey)) {
+                errorEl.textContent = 'Invalid Hive Posting Key';
+                return;
+            }
+            try {
+                await saveToIndexedDB('hive', { username, postingKey }, passphrase);
+                hiveCredentials = { username, postingKey };
+                errorEl.textContent = passphrase ? 'Credentials encrypted and stored securely' : 'Credentials stored unencrypted (use passphrase for extra security)';
+                closeHiveSetup();
+                updateBridgeStatus();
+                if (bridgeEnabled) processQueue();
+            } catch (error) {
+                errorEl.textContent = 'Storage failed: ' + error.message;
+            }
+        }
+
+        async function initHiveClient() {
+            if (hiveClient) return;
+            if (window.dhive) {
+                dhive = window.dhive;
+                hiveClient = new dhive.Client('https://api.hive.blog');
+                console.log('dhive initialized from primary source');
+                updateBridgeStatus();
+                return;
+            }
+            console.warn('dhive not loaded, attempting fallback');
+            for (let i = 0; i < 2; i++) {
+                try {
+                    const dhiveScript = document.getElementById('dhive-script');
+                    dhiveScript.src = 'https://cdn.jsdelivr.net/npm/@hiveio/dhive@1.3.0/dist/dhive.js';
+                    await new Promise((resolve, reject) => {
+                        dhiveScript.onload = () => resolve();
+                        dhiveScript.onerror = () => reject(new Error('CDN retry failed'));
+                    });
+                    dhive = window.dhive;
+                    if (dhive) {
+                        hiveClient = new dhive.Client('https://api.hive.blog');
+                        console.log('dhive initialized from CDN retry');
+                        updateBridgeStatus();
+                        return;
+                    }
+                } catch (error) {
+                    console.warn(`CDN retry ${i+1}/2 failed:`, error.message);
+                }
+            }
+            await loadDhiveFallback();
+        }
+
+        function toggleBridge() {
+            bridgeEnabled = document.getElementById('bridge-toggle').checked;
+            document.getElementById('bridge-label').textContent = bridgeEnabled ? 'Disable Nostr-to-Hive bridge' : 'Enable Nostr-to-Hive bridge';
+            updateBridgeStatus();
+            if (bridgeEnabled) processQueue();
+        }
+
+        // Container detection
+        async function getActiveContainer(frontEnd) {
+            if (!hiveClient) {
+                await initHiveClient();
+                if (!hiveClient) throw new Error('Hive client not initialized');
+            }
+            const query = {
+                tag: frontEnd === 'snaps' ? 'peak.snaps' : 'ecency.waves',
+                limit: 1
+            };
+            try {
+                console.log(`Fetching ${frontEnd} container...`);
+                const [post] = await hiveClient.database.getDiscussions('blog', query);
+                if (!post || post.author !== (frontEnd === 'snaps' ? 'peak.snaps' : 'ecency.waves')) {
+                    console.warn(`No valid ${frontEnd} container found`);
+                    return null;
+                }
+                console.log(`Found ${frontEnd} container: ${post.permlink}`);
+                return post.permlink;
+            } catch (error) {
+                console.error(`Error fetching ${frontEnd} container:`, error.message);
+                return null;
+            }
+        }
+
+        // Reset daily counts
+        function resetDailyCounts() {
+            const today = new Date().toDateString();
+            if (today !== lastSnapDay) {
+                dailySnapCount = 0;
+                lastSnapDay = today;
+                console.log('Reset daily snap count');
+            }
+        }
+
+        // Post info modal
+        function showPostInfoModal(message) {
+            document.getElementById('post-info-message').textContent = message;
+            document.getElementById('post-info-modal').style.display = 'block';
+            showOverlay();
+            setTimeout(closePostInfoModal, 3000);
+        }
+
+        function closePostInfoModal() {
+            document.getElementById('post-info-modal').style.display = 'none';
+            document.getElementById('post-info-message').textContent = '';
+            hideOverlay();
+        }
+
+        // Menu and modal interactions
+        function openMenu() {
+            console.log('Opening menu');
+            document.getElementById('menu').style.display = 'block';
+            document.getElementById('menu-overlay').style.display = 'block';
+        }
+
+        function closeMenu() {
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('menu-overlay').style.display = 'none';
+        }
+
+        function showOverlay() {
+            document.getElementById('menu-overlay').style.display = 'block';
+        }
+
+        function hideOverlay() {
+            document.getElementById('menu-overlay').style.display = 'none';
+        }
+
+        function openAbout() {
+            closeMenu();
+            document.getElementById('about-modal').style.display = 'block';
+            showOverlay();
+        }
+
+        function closeAbout() {
+            document.getElementById('about-modal').style.display = 'none';
+            hideOverlay();
+        }
+
+        function openSecurity() {
+            closeMenu();
+            document.getElementById('security-modal').style.display = 'block';
+            showOverlay();
+        }
+
+        function closeSecurity() {
+            document.getElementById('security-modal').style.display = 'none';
+            hideOverlay();
+        }
+
+        function openHiveSetup() {
+            closeMenu();
+            document.getElementById('hive-setup-modal').style.display = 'block';
+            document.getElementById('hive-username').value = hiveCredentials?.username || '';
+            document.getElementById('hive-posting-key').value = '';
+            document.getElementById('hive-passphrase').value = '';
+            document.getElementById('hive-error').textContent = hiveCredentials ? 'Update or replace existing credentials' : '';
+            showOverlay();
+        }
+
+        function closeHiveSetup() {
+            document.getElementById('hive-setup-modal').style.display = 'none';
+            document.getElementById('hive-username').value = '';
+            document.getElementById('hive-posting-key').value = '';
+            document.getElementById('hive-passphrase').value = '';
+            document.getElementById('hive-error').textContent = '';
+            hideOverlay();
+        }
+
+        function openJoinHive() {
+            closeMenu();
+            closeHiveSetup();
+            document.getElementById('join-hive-modal').style.display = 'block';
+            showOverlay();
+        }
+
+        function closeJoinHive() {
+            document.getElementById('join-hive-modal').style.display = 'none';
+            hideOverlay();
+        }
+
+        // Note posting
+        async function postNote() {
+            const content = document.getElementById('note-content').value;
+            const errorEl = document.getElementById('note-error');
+            errorEl.textContent = '';
+            if (!content) {
+                errorEl.textContent = 'Please enter note content';
+                return;
+            }
+            const event = {
+                kind: 1,
+                created_at: Math.floor(Date.now() / 1000),
+                tags: [['t', 'hostr']],
+                content,
+                pubkey: nostrPubkey
+            };
+            try {
+                let signedEvent;
+                if (window.nostr) {
+                    signedEvent = await window.nostr.signEvent(event);
+                } else if (nsec) {
+                    signedEvent = NostrTools.finalizeEvent(event, NostrTools.nip19.decode(nsec).data);
+                } else {
+                    throw new Error('No signing method available');
+                }
+                const pool = new NostrTools.SimplePool();
+                const activeRelays = [];
+                for (const relay of relays) {
+                    const connected = await tryConnect(pool, relay);
+                    if (connected) activeRelays.push(relay);
+                }
+                if (activeRelays.length === 0) {
+                    throw new Error('No relays available for publishing');
+                }
+                const kind1Relays = activeRelays.filter(r => r !== 'wss://purplepag.es');
+                if (kind1Relays.length === 0) {
+                    throw new Error('No relays available for kind 1');
+                }
+                console.log('Publishing to kind 1 relays:', kind1Relays);
+                await pool.publish(kind1Relays, signedEvent);
+                let message = 'Note broadcasted to Nostr';
+                if (bridgeEnabled && !hiveCredentials && sessionPassphrase) {
+                    const hiveData = await loadFromIndexedDB('hive', sessionPassphrase);
+                    if (hiveData) {
+                        hiveCredentials = hiveData;
+                        console.log('Hive credentials loaded for bridging');
+                        updateBridgeStatus();
+                    }
+                }
+                if (bridgeEnabled && hiveCredentials && hiveClient) {
+                    const nevent = NostrTools.nip19.neventEncode({ id: signedEvent.id, relays: kind1Relays });
+                    postQueue.push({ content, eventId: signedEvent.id, nevent, kind: 1 });
+                    processQueue();
+                    message += ' and queued for Hive bridging';
+                } else if (bridgeEnabled && !hiveClient) {
+                    console.warn('Cannot bridge: Hive library not loaded');
+                    message += ' (Hive bridging unavailable)';
+                    errorEl.textContent = 'Cannot bridge: Hive library not loaded';
+                } else if (bridgeEnabled && !hiveCredentials) {
+                    console.warn('Cannot bridge: Hive credentials missing');
+                    message += ' (Hive credentials missing)';
+                    errorEl.textContent = 'Cannot bridge: Hive credentials missing';
+                }
+                showPostInfoModal(message);
+                closeNoteModal();
+            } catch (error) {
+                errorEl.textContent = 'Failed to post: ' + error.message;
+            }
+        }
+
+        // Queue processing for Hive
+        async function processQueue() {
+            if (!bridgeEnabled || postQueue.length === 0 || !hiveCredentials || !hiveClient) {
+                updateBridgeStatus();
+                return;
+            }
+            resetDailyCounts();
+            if (dailySnapCount >= MAX_SHORTFORM_PER_DAY) {
+                document.getElementById('bridge-status').textContent = `Bridge: Daily limit reached (${MAX_SHORTFORM_PER_DAY})`;
+                setTimeout(processQueue, 24 * 60 * 60 * 1000);
+                return;
+            }
+            const now = Date.now();
+            if (now - lastHivePostTime < FIVE_MINUTES_MS) {
+                const waitTime = FIVE_MINUTES_MS - (now - lastHivePostTime);
+                document.getElementById('bridge-status').textContent = `Bridge: Waiting ${Math.round(waitTime / 1000)}s (queue: ${postQueue.length})`;
+                setTimeout(processQueue, waitTime);
+                return;
+            }
+            const post = postQueue.shift();
+            const permlink = `konetik-${frontEnds[frontEndIndex]}-${Math.random().toString(36).substring(2)}`;
+            console.log(`Processing post to ${frontEnds[frontEndIndex]}: ${post.eventId}`);
+            try {
+                const containerPermlink = await getActiveContainer(frontEnds[frontEndIndex]);
+                if (!containerPermlink) {
+                    console.warn(`No valid ${frontEnds[frontEndIndex]} container found`);
+                    postQueue.unshift(post);
+                    document.getElementById('bridge-status').textContent = `Bridge: No ${frontEnds[frontEndIndex]} container (queue: ${postQueue.length})`;
+                    setTimeout(processQueue, 2 * 60 * 1000);
+                    return;
+                }
+                const body = `${post.content}\n\nBridged via [konetik](https://konetik.vercel.app), view [original on Nostr](https://njump.me/${post.nevent}).`;
+                const postOp = {
+                    parent_author: frontEnds[frontEndIndex] === 'snaps' ? 'peak.snaps' : 'ecency.waves',
+                    parent_permlink: containerPermlink,
+                    author: hiveCredentials.username,
+                    permlink,
+                    title: '',
+                    body,
+                    json_metadata: JSON.stringify({ tags: ['hostr', `hostr-${frontEnds[frontEndIndex]}`], app: `konetik-${frontEnds[frontEndIndex]}/0.0.26` })
+                };
+                console.log(`Posting to Hive: ${permlink}`);
+                await hiveClient.broadcast.comment(postOp, dhive.PrivateKey.fromString(hiveCredentials.postingKey));
+                dailySnapCount++;
+                lastHivePostTime = now;
+                frontEndIndex = (frontEndIndex + 1) % frontEnds.length;
+                localStorage.setItem('frontEndIndex', frontEndIndex);
+                document.getElementById('bridge-status').textContent = `Bridge: Posted to ${frontEnds[frontEndIndex === 0 ? 1 : 0]} (queue: ${postQueue.length})`;
+                console.log(`Posted to ${frontEnds[frontEndIndex === 0 ? 1 : 0]}: ${permlink}`);
+            } catch (error) {
+                console.error('Error posting to Hive:', error.message);
+                postQueue.unshift(post);
+                document.getElementById('bridge-status').textContent = `Bridge: Error posting (queue: ${postQueue.length})`;
+                setTimeout(processQueue, 2 * 60 * 1000);
+            }
+            if (postQueue.length > 0) setTimeout(processQueue, 100);
+        }
+
+        // UI interactions
+        function openNoteModal() {
+            document.getElementById('note-modal').style.display = 'block';
+        }
+        function closeNoteModal() {
+            document.getElementById('note-modal').style.display = 'none';
+            document.getElementById('note-content').value = '';
+            document.getElementById('note-error').textContent = '';
+        }
+        function cancelNote() { closeNoteModal(); }
+        function openReplyModal() { document.getElementById('reply-modal').style.display = 'block'; }
+        function closeReplyModal() { document.getElementById('reply-modal').style.display = 'none'; }
+        function cancelReply() { closeReplyModal(); }
+        function postReply() { alert('Reply not implemented'); closeReplyModal(); }
+        async function refreshFeed() {
+            if (!isAwake) {
+                showPostInfoModal('konetik is in sleep mode. Wake to refresh.');
+                return;
+            }
+            const feed = document.getElementById('feed');
+            if (!nostrPubkey) {
+                feed.innerHTML = '<div class="error">Not logged in.</div>';
+                return;
+            }
+            feed.innerHTML = '<div class="loading">Loading feed...</div>';
+            try {
+                const pool = new NostrTools.SimplePool();
+                const activeRelays = [];
+                for (const relay of relays) {
+                    const connected = await tryConnect(pool, relay);
+                    if (connected) activeRelays.push(relay);
+                }
+                if (activeRelays.length === 0) {
+                    feed.innerHTML = '<div class="error">No relays available.</div>';
+                    return;
+                }
+                // Fetch follow list
+                const followed = await fetchFollowedPubkeys();
+                const authors = [nostrPubkey, ...followed];
+                // Fetch kind 1 notes for followed users + self (limit 40, last 7 days)
+                const since = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
+                const filter = { kinds: [1], authors, since, limit: 40 };
+                let events = [];
+                for (const relay of activeRelays) {
+                    try {
+                        const evs = await pool.list([relay], [filter]);
+                        events = events.concat(evs);
+                    } catch (e) {}
+                }
+                // Remove duplicates by event id
+                const seen = new Set();
+                events = events.filter(ev => {
+                    if (seen.has(ev.id)) return false;
+                    seen.add(ev.id); return true;
+                });
+                // Sort by created_at desc
+                events.sort((a, b) => b.created_at - a.created_at);
+                if (events.length === 0) {
+                    feed.innerHTML = '<div class="note">No notes found in your feed.</div>';
+                    return;
+                }
+                feed.innerHTML = '';
+                for (const event of events) {
+                    const date = new Date(event.created_at * 1000);
+                    const reltime = getRelativeTimeString(event.created_at);
+                    const content = escapeHTML(event.content).replace(/\n/g, '<br>');
+                    const author = NostrTools.nip19.npubEncode(event.pubkey);
+                    feed.innerHTML += `
+                        <div class="note" style="position:relative;padding-bottom:18px;">
+                            <div class="note-meta"><b>${author.slice(0, 12)}...</b> &middot; ${date.toLocaleString()} (${reltime})</div>
+                            <div class="note-content">${content}</div>
+                            <a href="#" class="reply-link" data-eventid="${event.id}" style="position:absolute;right:8px;bottom:2px;font-size:0.9em;color:#3498db;text-decoration:underline;">reply</a>
+                        </div>
+                    `;
+                }
+                // Add reply link event listeners
+                document.querySelectorAll('.reply-link').forEach(link => {
+                    link.onclick = function(e) {
+                        e.preventDefault();
+                        const eventId = this.getAttribute('data-eventid');
+                        openReplyModalForEvent(eventId);
+                    };
+                });
+            } catch (e) {
+                feed.innerHTML = `<div class="error">Error loading feed: ${e.message}</div>`;
+            }
+        }
+        function reloadPage() { window.location.reload(); }
+        function setSleepTimer(value) { alert(`Sleep timer set to ${value} (not implemented)`); }
+        async function logout() {
+            closeMenu();
+            nostrPubkey = null;
+            hiveCredentials = null;
+            nsec = null;
+            sessionPassphrase = null;
+            bridgeEnabled = true;
+            postQueue = [];
+            document.getElementById('login-section').style.display = 'block';
+            document.getElementById('app-section').style.display = 'none';
+            document.getElementById('bridge-status').textContent = 'Bridge: Active';
+            document.getElementById('bridge-toggle').checked = true;
+            document.getElementById('bridge-label').textContent = 'Disable Nostr-to-Hive bridge';
+            document.getElementById('login-status').textContent = '';
+            teardownNoteListener();
+            try {
+                const db = await new Promise((resolve, reject) => {
+                    const request = indexedDB.open('konetik', 1);
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+                const tx = db.transaction(['credentials'], 'readwrite');
+                const store = tx.objectStore('credentials');
+                await new Promise((resolve, reject) => {
+                    const request = store.clear();
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => reject(request.error);
+                });
+                db.close();
+            } catch (error) {
+                console.error('Failed to clear IndexedDB:', error);
+            }
+        }
+
+        // Handle dhive loading
+        let dhive = null;
+        let hiveClient = null;
+
+        async function loadDhiveFallback() {
+            const dhiveFallback = document.getElementById('dhive-fallback');
+            return new Promise((resolve, reject) => {
+                console.log('Attempting to load dhive from /dhive.js');
+                dhiveFallback.src = '/dhive.js';
+                dhiveFallback.onload = () => {
+                    dhive = window.dhive;
+                    if (dhive) {
+                        hiveClient = new dhive.Client('https://api.hive.blog');
+                        console.log('dhive loaded successfully from fallback');
+                        updateBridgeStatus();
+                        resolve();
+                    } else {
+                        console.error('dhive failed to load to window.dhive');
+                        document.getElementById('hive-error').textContent = 'Hive library failed to load. Bridging disabled.';
+                        updateBridgeStatus();
+                        reject(new Error('dhive fallback failed'));
+                    }
+                };
+                dhiveFallback.onerror = () => {
+                    console.error('Failed to load dhive from /dhive.js');
+                    document.getElementById('hive-error').textContent = 'Hive library failed to load. Bridging disabled.';
+                    updateBridgeStatus();
+                    reject(new Error('dhive fallback load error'));
+                };
+            });
+        }
+
+        // Helper: escape HTML
+        function escapeHTML(str) {
+            return str.replace(/[&<>"']/g, function(tag) {
+                const chars = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'};
+                return chars[tag] || tag;
+            });
+        }
+
+        // Helper: relative time string
+        function getRelativeTimeString(timestamp) {
+            const now = Math.floor(Date.now() / 1000);
+            const diff = now - timestamp;
+            if (diff < 60) return 'just now';
+            if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+            if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+            if (diff < 604800) return Math.floor(diff/86400) + 'd ago';
+            return new Date(timestamp*1000).toLocaleDateString();
+        }
+
+        // Event listeners
+        window.addEventListener('load', () => {
+            const dhiveScript = document.getElementById('dhive-script');
+            if (dhiveScript) {
+                dhiveScript.onload = () => {
+                    dhive = window.dhive;
+                    if (dhive) {
+                        hiveClient = new dhive.Client('https://api.hive.blog');
+                        console.log('dhive loaded from primary source (CDN)');
+                        updateBridgeStatus();
+                    } else {
+                        console.error('dhive failed to attach to window.dhive');
+                        loadDhiveFallback();
+                    }
+                };
+                dhiveScript.onerror = () => {
+                    console.error('Failed to load dhive from CDN, retrying...');
+                    setTimeout(() => {
+                        initHiveClient();
+                    }, 1000);
+                };
+            } else {
+                console.error('dhive-script element not found');
+                loadDhiveFallback();
+            }
+
+            // Register service worker for PWA
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw.js').then(reg => {
+                    console.log('Service Worker registered:', reg);
+                }).catch(err => {
+                    console.error('Service Worker registration failed:', err);
+                });
+            }
+
+            // Bind event listeners
+            document.getElementById('login-connect-btn').addEventListener('click', loginWithNostrConnect);
+            document.getElementById('login-extension-btn').addEventListener('click', loginWithExtension);
+            document.getElementById('nsec-visibility-btn').addEventListener('click', toggleNsecVisibility);
+            document.getElementById('nsec-passphrase-visibility-btn').addEventListener('click', toggleNsecPassphraseVisibility);
+            document.getElementById('hive-posting-key-visibility-btn').addEventListener('click', toggleHivePostingKeyVisibility);
+            document.getElementById('hive-passphrase-visibility-btn').addEventListener('click', toggleHivePassphraseVisibility);
+            document.getElementById('login-nsec-btn').addEventListener('click', loginWithNsec);
+            document.getElementById('save-hive-btn').addEventListener('click', saveHiveCredentials);
+            document.getElementById('close-hive-btn').addEventListener('click', closeHiveSetup);
+            document.getElementById('bridge-toggle').addEventListener('change', toggleBridge);
+            document.getElementById('note-btn').addEventListener('click', openNoteModal);
+            document.getElementById('menu-btn').addEventListener('pointerdown', openMenu);
+            document.querySelectorAll('#about-link').forEach(link => link.addEventListener('click', openAbout));
+            document.getElementById('security-home-link').addEventListener('click', openSecurity);
+            document.getElementById('security-link').addEventListener('click', openSecurity);
+            document.getElementById('hive-setup-link').addEventListener('click', openHiveSetup);
+            document.getElementById('join-hive-link').addEventListener('click', openJoinHive);
+            document.getElementById('join-hive-from-setup-link').addEventListener('click', openJoinHive);
+            document.getElementById('sleep-timer').addEventListener('change', e => setSleepTimer(e.target.value));
+            document.getElementById('logout-btn').addEventListener('click', logout);
+            document.getElementById('refresh-btn').addEventListener('click', refreshFeed);
+            document.getElementById('reload-btn').addEventListener('click', reloadPage);
+            document.getElementById('cancel-note-btn').addEventListener('click', cancelNote);
+            document.getElementById('post-note-btn').addEventListener('click', postNote);
+            document.getElementById('cancel-reply-btn').addEventListener('click', cancelReply);
+            document.getElementById('post-reply-btn').addEventListener('click', postReply);
+            document.getElementById('close-about-btn').addEventListener('click', closeAbout);
+            document.getElementById('close-security-btn').addEventListener('click', closeSecurity);
+            document.getElementById('close-join-hive-btn').addEventListener('click', closeJoinHive);
+            document.getElementById('close-post-info-btn').addEventListener('click', closePostInfoModal);
+            document.getElementById('wake-btn').addEventListener('click', wakeApp);
+            document.getElementById('close-menu-btn').addEventListener('click', closeMenu);
+            document.getElementById('menu-overlay').addEventListener('click', function() {
+                // Close any open modal/info popup or menu
+                closeMenu();
+                closeAbout();
+                closeSecurity();
+                closeHiveSetup();
+                closeJoinHive();
+                closePostInfoModal();
+            });
+        });
+
+        // Real-time note listening and notifications
+        let noteSub = null;
+        let notePool = null;
+        let latestNote = null;
+        function setupNoteListener() {
+            if (!isAwake || !nostrPubkey) return;
+            if (noteSub) return; // Already listening
+            notePool = new NostrTools.SimplePool();
+            const activeRelays = [];
+            (async () => {
+                for (const relay of relays) {
+                    const connected = await tryConnect(notePool, relay);
+                    if (connected) activeRelays.push(relay);
+                }
+                if (activeRelays.length === 0) return;
+                noteSub = notePool.subscribeMany(
+                    activeRelays,
+                    [{ kinds: [1], authors: [nostrPubkey], since: Math.floor(Date.now() / 1000) }],
+                    {
+                        onevent(event) {
+                            // Only notify if it's a new note (not already in feed)
+                            if (!latestNote || event.id !== latestNote.id) {
+                                latestNote = event;
+                                showNotificationBtn(event);
+                            }
+                        },
+                        oneose() {}
+                    }
+                );
+            })();
+        }
+        function teardownNoteListener() {
+            if (noteSub && notePool) {
+                notePool.close();
+            }
+            noteSub = null;
+            notePool = null;
+            hideNotificationBtn();
+        }
+        function showNotificationBtn(event) {
+            hasNotification = true;
+            renderNotifCircle();
+            showNotifAlert('New notification!');
+        }
+        function hideNotificationBtn() {
+            hasNotification = false;
+            renderNotifCircle();
+        }
+
+        // Notification circle logic
+        let hasNotification = false;
+        function renderNotifCircle() {
+            const el = document.getElementById('notif-circle');
+            if (!el) return;
+            const baseStyle = 'width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.08);border-radius:50%;';
+            if (hasNotification) {
+                // Green filled circle for new notifications
+                el.innerHTML = '<div style="background:#27ae60;width:20px;height:20px;border-radius:50%;"></div>';
+            } else if (hasFeedAlert) {
+                // Blue filled circle for feed alert
+                el.innerHTML = '<div style="background:#3498db;width:20px;height:20px;border-radius:50%;"></div>';
+            } else {
+                // Faint gray circle for no notifications
+                el.innerHTML = '<div style="background:#eee;width:20px;height:20px;border-radius:50%;border:1.5px solid #ccc;"></div>';
+            }
+            el.style = baseStyle + 'position:fixed;top:16px;right:16px;z-index:1200;';
+        }
+        function showNotifAlert(msg) {
+            const alert = document.getElementById('notif-alert');
+            alert.textContent = msg;
+            alert.style.display = 'block';
+            setTimeout(() => { alert.style.display = 'none'; }, 4000);
+        }
+        function notifCircleClick() {
+            if (!nostrPubkey) return;
+            const npub = NostrTools.nip19.npubEncode(nostrPubkey);
+            window.open(`https://njump.me/${npub}`, '_blank');
+            hasNotification = false;
+            renderNotifCircle();
+        }
+        document.addEventListener('DOMContentLoaded', () => {
+            const el = document.getElementById('notif-circle');
+            if (el) el.onclick = notifCircleClick;
+            renderNotifCircle();
+        });
+
+        // --- FEED ALERT LOGIC ---
+        let followedPubkeys = [];
+        let feedNoteSub = null;
+        let feedNotePool = null;
+        let hasFeedAlert = false;
+
+        async function fetchFollowedPubkeys() {
+            if (!nostrPubkey) return [];
+            const pool = new NostrTools.SimplePool();
+            const activeRelays = [];
+            for (const relay of relays) {
+                const connected = await tryConnect(pool, relay);
+                if (connected) activeRelays.push(relay);
+            }
+            if (activeRelays.length === 0) return [];
+            // Fetch latest kind 3 event (contacts)
+            let events = [];
+            try {
+                events = await pool.list(activeRelays, [{ kinds: [3], authors: [nostrPubkey], limit: 1 }]);
+            } catch (e) { return []; }
+            if (!events.length) return [];
+            const tags = events[0].tags || [];
+            return tags.filter(t => t[0] === 'p').map(t => t[1]);
+        }
+
+        function setupFeedNoteListener() {
+            if (!isAwake || !nostrPubkey) return;
+            if (feedNoteSub) return; // Already listening
+            (async () => {
+                followedPubkeys = await fetchFollowedPubkeys();
+                if (!followedPubkeys.length) return;
+                feedNotePool = new NostrTools.SimplePool();
+                const activeRelays = [];
+                for (const relay of relays) {
+                    const connected = await tryConnect(feedNotePool, relay);
+                    if (connected) activeRelays.push(relay);
+                }
+                if (activeRelays.length === 0) return;
+                feedNoteSub = feedNotePool.subscribeMany(
+                    activeRelays,
+                    [{ kinds: [1], authors: followedPubkeys, since: Math.floor(Date.now() / 1000) }],
+                    {
+                        onevent(event) {
+                            // Only alert if not from self
+                            if (event.pubkey !== nostrPubkey) {
+                                showFeedAlert(event);
+                            }
+                        },
+                        oneose() {}
+                    }
+                );
+            })();
+        }
+        function teardownFeedNoteListener() {
+            if (feedNoteSub && feedNotePool) feedNotePool.close();
+            feedNoteSub = null;
+            feedNotePool = null;
+            hideFeedAlert();
+        }
+        function showFeedAlert(event) {
+            hasFeedAlert = true;
+            renderNotifCircle();
+            showNotifAlert('New note in your feed!');
+        }
+        function hideFeedAlert() {
+            hasFeedAlert = false;
+            renderNotifCircle();
+        }
+        // Patch into sleep/awake logic
+        const origUpdateSleepUI = updateSleepUI;
+        updateSleepUI = function() {
+            origUpdateSleepUI();
+            if (isAwake) setupFeedNoteListener();
+            else teardownFeedNoteListener();
+        };
+        // Patch into login/showApp
+        const origShowApp = showApp;
+        showApp = async function() {
+            await origShowApp();
+            if (isAwake) setupFeedNoteListener();
+        };
+        // --- END FEED ALERT LOGIC ---
+
+        // Add openReplyModalForEvent helper
+        function openReplyModalForEvent(eventId) {
+            // Optionally, you can prefill reply modal with context, or just open it
+            openReplyModal();
+            // You can add more logic here to show the note being replied to, etc.
+        }
+    </script>
+</body>
+</html>
+<!-- konetik v0.0.26 -->
