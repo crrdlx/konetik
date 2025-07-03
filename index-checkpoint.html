@@ -1,4 +1,4 @@
-<!-- konetik index.html v0.1.0 - public open source -->
+<!-- konetik v0.1.1 - initial public open source -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -212,7 +212,7 @@
 
     <!-- Version Footer -->
     <footer>
-        <p class="info">konetik v0.1.0</p>
+        <p class="info">konetik v0.1.1</p>
     </footer>
 
     <button id="sleep-toggle" style="position:fixed;top:12px;left:16px;z-index:1201;min-width:64px;height:32px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:15px;box-shadow:0 2px 8px rgba(0,0,0,0.08);border:none;outline:none;cursor:pointer;padding:0 10px;gap:4px;"></button>
@@ -255,7 +255,7 @@
     </div>
 
     <script>
-        // konetik index.html v0.1.0 -->
+        // konetik index.html v0.1.1 -->
         // Core variables
         const relays = [
             'wss://relay.damus.io',
@@ -366,7 +366,7 @@
                 }
             } else {
                 console.log('loginWithExtension: no window.nostr');
-                errorEl.textContent = 'Please install a Nostr extension (e.g., Alby, Nos2x)';
+                errorEl.textContent = 'Please install a Nostr extension (e.g., Alby, Nos2x, Gooti, etc.)';
             }
         }
 
@@ -935,7 +935,7 @@
             const event = {
                 kind: 1,
                 created_at: Math.floor(Date.now() / 1000),
-                tags: [['t', 'hostr']],
+                tags: [], // Hashtags can be added here in the future, e.g. [['t', 'example']]
                 content,
                 pubkey: nostrPubkey
             };
@@ -1007,7 +1007,7 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
                 permlink,
                 title: '',
                 body,
-                json_metadata: JSON.stringify({ tags: ['hostr', 'konetik', 'blog'], app: `konetik-blog/0.1.0` })
+                json_metadata: JSON.stringify({ tags: ['hostr', 'konetik', 'blog'], app: `konetik-blog/0.1.1` })
             };
             try {
                 await hiveClient.broadcast.comment(postOp, dhive.PrivateKey.fromString(hiveCredentials.postingKey));
@@ -1055,7 +1055,7 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
                     permlink,
                     title: '',
                     body,
-                    json_metadata: JSON.stringify({ tags: ['hostr', `hostr-${frontEnds[frontEndIndex]}`], app: `konetik-${frontEnds[frontEndIndex]}/0.1.0` })
+                    json_metadata: JSON.stringify({ tags: ['hostr', `hostr-${frontEnds[frontEndIndex]}`], app: `konetik-${frontEnds[frontEndIndex]}/0.1.1` })
                 };
                 console.log(`Posting to Hive: ${permlink}`);
                 await hiveClient.broadcast.comment(postOp, dhive.PrivateKey.fromString(hiveCredentials.postingKey));
@@ -1575,4 +1575,4 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
     </script>
 </body>
 </html>
-<!-- konetik v0.1.0 - public open source -->
+<!-- konetik v0.1.1 - public open source -->
