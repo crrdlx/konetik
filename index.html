@@ -1,4 +1,4 @@
-<!-- konetik index.html v0.1.0 - public open source -->
+<!-- konetik v0.1.2 - initial public open source -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -212,7 +212,7 @@
 
     <!-- Version Footer -->
     <footer>
-        <p class="info">konetik v0.1.0</p>
+        <p class="info">konetik v0.1.2</p>
     </footer>
 
     <button id="sleep-toggle" style="position:fixed;top:12px;left:16px;z-index:1201;min-width:64px;height:32px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:15px;box-shadow:0 2px 8px rgba(0,0,0,0.08);border:none;outline:none;cursor:pointer;padding:0 10px;gap:4px;"></button>
@@ -236,18 +236,26 @@
     <!-- But Why Modal -->
     <div id="but-why-modal" style="display:none;position:fixed;top:10%;left:10%;right:10%;background:#fff;border:1px solid #000;padding:20px;z-index:1001;max-width:480px;margin:0 auto;box-shadow:0 2px 8px rgba(0,0,0,0.08);overflow-y:auto;max-height:80vh;">
         <h2>But, why?</h2>
-        <p>Why bridge Nostr and Hive? Because each network has unique strengths, and connecting them lets you reach more people, preserve your posts, and experiment with new forms of social publishing.</p>
+        <p>If you're a Nostr user, you'll get:</p>
         <ul>
-            <li><b>Nostr</b> is censorship-resistant, fast, and fun, but ephemeral—posts can disappear if relays go offline.</li>
-            <li><b>Hive</b> is a decentralized blockchain with permanent, public storage and rewards, but is slower and less flexible for rapid posting.</li>
-            <li>By bridging, you get the best of both: instant posting and discovery on Nostr, plus permanent, tamper-proof archiving and rewards on Hive.</li>
-            <li>It's also a fun experiment in interoperability and open protocols!</li>
+            <li>your notes immutably, chronologically, stored on the Hive blockchain (and able to be found even years later)</li>
+            <li>exposure to 15,000+ daily Hive users (to extend your reach)</li>
+            <li>rewards earned from Hive upvotes (which can be changed to sats if desired)</li>
+            <li>a chance to introduce Nostr to people who haven't heard of it before</li>
+        </ul>
+        <p>If you're already a Hive user, you'll get:</p>
+        <ul>
+            <li>exposure to 17,000+ daily Nostr users (to extend your reach)</li>
+            <li>bitcoin sats as "zaps" (bitcoin tips)</li>
+            <li>unlimited posting (there are no "Resource Credit" contsraints)</li>
+            <li>even more censorship resistance</li>
+            <li>the chance to introduce Hive to those who have not heard of it before</li>
         </ul>
         <button id="close-but-why-btn">close</button>
     </div>
 
     <script>
-        // konetik index.html v0.1.0 -->
+        // konetik index.html v0.1.2 -->
         // Core variables
         const relays = [
             'wss://relay.damus.io',
@@ -302,17 +310,19 @@
         function updateSleepToggleUI() {
             const btn = document.getElementById('sleep-toggle');
             if (!btn) return;
-            btn.innerHTML = isAwake ? '<span style="font-size:18px;">☀️</span> <span style="font-size:13px;">awake</span>' : '<span style="font-size:18px;">🌙</span> <span style="font-size:13px;">asleep</span>';
+            btn.innerHTML = isAwake
+                ? '<span style="font-size:15px;">☀️</span> <span style="font-size:11px;">awake</span>'
+                : '<span style="font-size:15px;">🌙</span> <span style="font-size:11px;">asleep</span>';
             btn.title = isAwake ? 'awake (click to sleep)' : 'asleep (click to wake)';
             btn.style.background = isAwake ? '#4CAF50' : '#f5f5f5';
             btn.style.color = isAwake ? 'white' : '#666';
-            btn.style.minWidth = '64px';
-            btn.style.height = '32px';
-            btn.style.borderRadius = '16px';
+            btn.style.minWidth = '40px';
+            btn.style.height = '24px';
+            btn.style.borderRadius = '12px';
             btn.style.display = 'flex';
             btn.style.alignItems = 'center';
             btn.style.justifyContent = 'center';
-            btn.style.fontSize = '15px';
+            btn.style.fontSize = '12px';
             btn.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)';
             btn.style.position = 'fixed';
             btn.style.top = '12px';
@@ -321,8 +331,8 @@
             btn.style.border = 'none';
             btn.style.outline = 'none';
             btn.style.cursor = 'pointer';
-            btn.style.padding = '0 10px';
-            btn.style.gap = '4px';
+            btn.style.padding = '0 6px';
+            btn.style.gap = '2px';
         }
         function toggleSleepState() {
             isAwake = !isAwake;
@@ -358,7 +368,7 @@
                 }
             } else {
                 console.log('loginWithExtension: no window.nostr');
-                errorEl.textContent = 'Please install a Nostr extension (e.g., Alby, Nos2x)';
+                errorEl.textContent = 'Please install a Nostr extension (e.g., Alby, Nos2x, Gooti, etc.)';
             }
         }
 
@@ -927,7 +937,7 @@
             const event = {
                 kind: 1,
                 created_at: Math.floor(Date.now() / 1000),
-                tags: [['t', 'hostr']],
+                tags: [], // Hashtags can be added here in the future, e.g. [['t', 'example']]
                 content,
                 pubkey: nostrPubkey
             };
@@ -989,7 +999,10 @@
             // Post as a top-level Hive post (blog)
             if (!hiveCredentials || !hiveClient) return;
             const permlink = `konetik-blog-${Math.random().toString(36).substring(2)}`;
+            // Add a horizontal rule and two newlines before the footer
             const body = `${content}
+
+---
 
 Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](https://njump.me/${signedEvent.id}).`;
             const postOp = {
@@ -999,7 +1012,7 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
                 permlink,
                 title: '',
                 body,
-                json_metadata: JSON.stringify({ tags: ['hostr', 'konetik', 'blog'], app: `konetik-blog/0.1.0` })
+                json_metadata: JSON.stringify({ tags: ['hostr', 'konetik', 'blog'], app: `konetik-blog/0.1.2` })
             };
             try {
                 await hiveClient.broadcast.comment(postOp, dhive.PrivateKey.fromString(hiveCredentials.postingKey));
@@ -1039,7 +1052,11 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
                     setTimeout(() => { updateBridgeStatus(); processQueue(); }, 2 * 60 * 1000);
                     return;
                 }
-                const body = `${post.content}\n\nBridged via [konetik](https://konetik.vercel.app), view [original on Nostr](https://njump.me/${post.nevent}).`;
+                const body = `${post.content}
+
+---
+
+Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](https://njump.me/${post.nevent}).`;
                 const postOp = {
                     parent_author: frontEnds[frontEndIndex] === 'snaps' ? 'peak.snaps' : 'ecency.waves',
                     parent_permlink: containerPermlink,
@@ -1047,7 +1064,7 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
                     permlink,
                     title: '',
                     body,
-                    json_metadata: JSON.stringify({ tags: ['hostr', `hostr-${frontEnds[frontEndIndex]}`], app: `konetik-${frontEnds[frontEndIndex]}/0.1.0` })
+                    json_metadata: JSON.stringify({ tags: ['hostr', `hostr-${frontEnds[frontEndIndex]}`], app: `konetik-${frontEnds[frontEndIndex]}/0.1.2` })
                 };
                 console.log(`Posting to Hive: ${permlink}`);
                 await hiveClient.broadcast.comment(postOp, dhive.PrivateKey.fromString(hiveCredentials.postingKey));
@@ -1567,4 +1584,4 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
     </script>
 </body>
 </html>
-<!-- konetik v0.1.0 - public open source -->
+<!-- konetik v0.1.2 - public open source -->
