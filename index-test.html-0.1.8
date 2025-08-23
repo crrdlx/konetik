@@ -1,4 +1,4 @@
-<!-- konetik v0.1.5 - initial public open source -->
+<!-- konetik v0.1.8 - initial public open source -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -101,11 +101,26 @@
 
     <!-- Main App Section -->
     <section id="app-section" style="display: none;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <div class="header">
             <span id="login-status" class="status"></span>
             <button id="menu-btn" style="margin-left:auto;">☰</button>
         </div>
-        <p><label><input type="checkbox" id="bridge-toggle" checked> <span id="bridge-label">Disable Nostr-to-Hive bridge</span></label></p>
+        
+        <!-- Moved preferences section to be more prominent -->
+        <!-- Bridge and Hive Posting Preferences -->
+        <div style="margin: 10px 0; padding: 10px; border: 1px solid #333; border-radius: 5px; background: rgba(0,0,0,0.1);">
+            <!-- moved checkbox before text for better alignment -->
+            <p><label><input type="checkbox" id="bridge-toggle" checked> <span id="bridge-label">Check box to disable Nostr-to-Hive bridge and post only to nostr</span></label></p>
+            
+            <div id="hive-preferences" style="margin-top: 10px;">
+                <p style="margin: 0 0 8px 0; font-weight: bold;">Hive Posting Preference:</p>
+                <!-- moved radio buttons before text for neat alignment -->
+                <p style="margin: 5px 0;"><label><input type="radio" name="hive-mode" value="alternate" checked> Alternate between PeakD Snaps and Ecency Waves</label></p>
+                <p style="margin: 5px 0;"><label><input type="radio" name="hive-mode" value="snaps"> Always post to PeakD Snaps</label></p>
+                <p style="margin: 5px 0;"><label><input type="radio" name="hive-mode" value="waves"> Always post to Ecency Waves</label></p>
+            </div>
+        </div>
+        
         <p id="bridge-status" class="status">Bridge: Active</p>
         <nav id="main-menu-nav" style="display:none;">
             <div id="menu-overlay"></div>
@@ -190,7 +205,7 @@
 
     <!-- Version Footer -->
     <footer>
-        <p class="info">konetik v0.1.5</p>
+        <p class="info">konetik v0.1.8</p>
     </footer>
 
     <!-- Notification UI removed -->
@@ -232,7 +247,7 @@
     </div>
 
     <script>
-        // konetik index.html v0.1.5 -->
+        // konetik index.html v0.1.8 -->
         // Core variables
         const relays = [
             'wss://relay.damus.io',
@@ -253,11 +268,18 @@
         let dailySnapCount = 0;
         let lastSnapDay = new Date().toDateString();
         let frontEndIndex = 0;
-        // Load frontEndIndex from localStorage if present
+        let hivePostingMode = 'alternate'; // 'alternate', 'snaps', or 'waves'
+        
+        // Load preferences from localStorage
         if (localStorage.getItem('frontEndIndex') !== null) {
             const idx = parseInt(localStorage.getItem('frontEndIndex'), 10);
             if (!isNaN(idx) && idx >= 0 && idx < 2) frontEndIndex = idx;
         }
+        
+        if (localStorage.getItem('hivePostingMode') !== null) {
+            hivePostingMode = localStorage.getItem('hivePostingMode');
+        }
+        
         const frontEnds = ['snaps', 'waves'];
         const FIVE_MINUTES_MS = 5 * 60 * 1000;
         const MAX_SHORTFORM_PER_DAY = 12;
@@ -596,6 +618,26 @@
             if (bridgeEnabled) processQueue();
         }
 
+        function updateHivePostingMode() {
+            const selectedMode = document.querySelector('input[name="hive-mode"]:checked').value;
+            hivePostingMode = selectedMode;
+            localStorage.setItem('hivePostingMode', hivePostingMode);
+            console.log(`Hive posting mode changed to: ${hivePostingMode}`);
+        }
+
+        function initializePreferences() {
+            // Set the radio button based on stored preference
+            const radioButton = document.querySelector(`input[name="hive-mode"][value="${hivePostingMode}"]`);
+            if (radioButton) {
+                radioButton.checked = true;
+            }
+            
+            // Add event listeners to radio buttons
+            document.querySelectorAll('input[name="hive-mode"]').forEach(radio => {
+                radio.addEventListener('change', updateHivePostingMode);
+            });
+        }
+
         // Container detection
         async function getActiveContainer(frontEnd) {
             if (!hiveClient) {
@@ -923,7 +965,7 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
                 permlink,
                 title: '',
                 body,
-                json_metadata: JSON.stringify({ tags: ['hostr', 'konetik', 'blog'], app: `konetik-blog/0.1.5` })
+                json_metadata: JSON.stringify({ tags: ['hostr', 'konetik', 'blog'], app: `konetik-blog/0.1.8` })
             };
             try {
                 await hiveClient.broadcast.comment(postOp, dhive.PrivateKey.fromString(hiveCredentials.postingKey));
@@ -963,11 +1005,18 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
                     setTimeout(() => { updateBridgeStatus(); processQueue(); }, 2 * 60 * 1000);
                     return;
                 }
-                const body = `${post.content}
 
----
+                let usedFrontend;
+                if (hivePostingMode === 'alternate') {
+                    usedFrontend = frontEnds[frontEndIndex]; // Capture current frontend
+                } else if (hivePostingMode === 'snaps') {
+                    frontEndIndex = 0; // Always use snaps
+                    usedFrontend = 'snaps';
+                } else if (hivePostingMode === 'waves') {
+                    frontEndIndex = 1; // Always use waves
+                    usedFrontend = 'waves';
+                }
 
-Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](https://njump.me/${post.nevent}).`;
                 const postOp = {
                     parent_author: frontEnds[frontEndIndex] === 'snaps' ? 'peak.snaps' : 'ecency.waves',
                     parent_permlink: containerPermlink,
@@ -975,17 +1024,21 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
                     permlink,
                     title: '',
                     body,
-                    json_metadata: JSON.stringify({ tags: ['hostr', `hostr-${frontEnds[frontEndIndex]}`], app: `konetik-${frontEnds[frontEndIndex]}/0.1.5` })
+                    json_metadata: JSON.stringify({ tags: ['hostr', `hostr-${frontEnds[frontEndIndex]}`], app: `konetik-${frontEnds[frontEndIndex]}/0.1.8` })
                 };
                 console.log(`Posting to Hive: ${permlink}`);
                 await hiveClient.broadcast.comment(postOp, dhive.PrivateKey.fromString(hiveCredentials.postingKey));
                 dailySnapCount++;
                 lastHivePostTime = now;
-                frontEndIndex = (frontEndIndex + 1) % frontEnds.length;
-                localStorage.setItem('frontEndIndex', frontEndIndex);
-                document.getElementById('bridge-status').innerHTML = `Bridge: Posted to ${frontEnds[frontEndIndex === 0 ? 1 : 0]}`;
+                
+                if (hivePostingMode === 'alternate') {
+                    frontEndIndex = (frontEndIndex + 1) % frontEnds.length;
+                    localStorage.setItem('frontEndIndex', frontEndIndex);
+                }
+                
+                document.getElementById('bridge-status').innerHTML = `Bridge: Posted to ${usedFrontend}`;
                 setTimeout(updateBridgeStatus, 2000);
-                console.log(`Posted to ${frontEnds[frontEndIndex === 0 ? 1 : 0]}: ${permlink}`);
+                console.log(`Posted to ${usedFrontend}: ${permlink}`);
             } catch (error) {
                 console.error('Error posting to Hive:', error.message);
                 postQueue.unshift(post);
@@ -1221,4 +1274,4 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
     </script>
 </body>
 </html>
-<!-- konetik v0.1.5 - public open source -->
+<!-- konetik v0.1.8 - public open source -->
