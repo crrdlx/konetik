@@ -1,4 +1,4 @@
-<!-- konetik v0.1.3 - initial public open source -->
+<!-- konetik v0.1.4 - initial public open source -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -190,7 +190,7 @@
 
     <!-- Version Footer -->
     <footer>
-        <p class="info">konetik v0.1.3</p>
+        <p class="info">konetik v0.1.4</p>
     </footer>
 
     <!-- Notification UI removed -->
@@ -232,7 +232,7 @@
     </div>
 
     <script>
-        // konetik index.html v0.1.3 -->
+        // konetik index.html v0.1.4 -->
         // Core variables
         const relays = [
             'wss://relay.damus.io',
@@ -643,6 +643,8 @@
             document.getElementById('post-info-modal').style.display = 'none';
             document.getElementById('post-info-message').textContent = '';
             hideOverlay();
+            // Show the note form so user can post another note
+            showNoteForm();
         }
 
         // Menu and modal interactions
@@ -921,7 +923,7 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
                 permlink,
                 title: '',
                 body,
-                json_metadata: JSON.stringify({ tags: ['hostr', 'konetik', 'blog'], app: `konetik-blog/0.1.3` })
+                json_metadata: JSON.stringify({ tags: ['hostr', 'konetik', 'blog'], app: `konetik-blog/0.1.4` })
             };
             try {
                 await hiveClient.broadcast.comment(postOp, dhive.PrivateKey.fromString(hiveCredentials.postingKey));
@@ -973,7 +975,7 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
                     permlink,
                     title: '',
                     body,
-                    json_metadata: JSON.stringify({ tags: ['hostr', `hostr-${frontEnds[frontEndIndex]}`], app: `konetik-${frontEnds[frontEndIndex]}/0.1.3` })
+                    json_metadata: JSON.stringify({ tags: ['hostr', `hostr-${frontEnds[frontEndIndex]}`], app: `konetik-${frontEnds[frontEndIndex]}/0.1.4` })
                 };
                 console.log(`Posting to Hive: ${permlink}`);
                 await hiveClient.broadcast.comment(postOp, dhive.PrivateKey.fromString(hiveCredentials.postingKey));
@@ -1008,74 +1010,8 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
         function closeReplyModal() { document.getElementById('reply-modal').style.display = 'none'; }
         function cancelReply() { closeReplyModal(); }
         function postReply() { alert('Reply not implemented'); closeReplyModal(); }
-        async function refreshFeed() {
-            const feed = document.getElementById('feed');
-            if (!nostrPubkey) {
-                feed.innerHTML = '<div class="error">Not logged in.</div>';
-                return;
-            }
-            feed.innerHTML = '<div class="loading">Loading feed...</div>';
-            try {
-                const pool = new NostrTools.SimplePool();
-                const activeRelays = [];
-                for (const relay of relays) {
-                    const connected = await tryConnect(pool, relay);
-                    if (connected) activeRelays.push(relay);
-                }
-                if (activeRelays.length === 0) {
-                    feed.innerHTML = '<div class="error">No relays available.</div>';
-                    return;
-                }
-                // Fetch kind 1 notes for self (limit 40, last 7 days)
-                const since = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
-                const filter = { kinds: [1], authors: [nostrPubkey], since, limit: 40 };
-                let events = [];
-                for (const relay of activeRelays) {
-                    try {
-                        const evs = await pool.list([relay], [filter]);
-                        events = events.concat(evs);
-                    } catch (e) {}
-                }
-                console.log('Events fetched:', events.length, events);
-                // Remove duplicates by event id
-                const seen = new Set();
-                events = events.filter(ev => {
-                    if (seen.has(ev.id)) return false;
-                    seen.add(ev.id); return true;
-                });
-                // Sort by created_at desc
-                events.sort((a, b) => b.created_at - a.created_at);
-                if (events.length === 0) {
-                    feed.innerHTML = '<div class="note">No notes found in your feed.</div>';
-                    return;
-                }
-                feed.innerHTML = '';
-                for (const event of events) {
-                    const date = new Date(event.created_at * 1000);
-                    const reltime = getRelativeTimeString(event.created_at);
-                    const content = escapeHTML(event.content).replace(/\n/g, '<br>');
-                    const author = NostrTools.nip19.npubEncode(event.pubkey);
-                    feed.innerHTML += `
-                        <div class="note" style="position:relative;padding-bottom:18px;">
-                            <div class="note-meta"><b>${author.slice(0, 12)}...</b> &middot; ${date.toLocaleString()} (${reltime})</div>
-                            <div class="note-content">${content}</div>
-                            <a href="#" class="reply-link" data-eventid="${event.id}" style="position:absolute;right:8px;bottom:2px;font-size:0.9em;color:#3498db;text-decoration:underline;">reply</a>
-                        </div>
-                    `;
-                }
-                // Add reply link event listeners
-                document.querySelectorAll('.reply-link').forEach(link => {
-                    link.onclick = function(e) {
-                        e.preventDefault();
-                        const eventId = this.getAttribute('data-eventid');
-                        openReplyModalForEvent(eventId);
-                    };
-                });
-            } catch (e) {
-                feed.innerHTML = `<div class="error">Error loading feed: ${e.message}</div>`;
-            }
-        }
-        function reloadPage() { window.location.reload(); }
+
+
 
         async function logout() {
             closeMenu();
@@ -1143,24 +1079,7 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
             });
         }
 
-        // Helper: escape HTML
-        function escapeHTML(str) {
-            return str.replace(/[&<>"']/g, function(tag) {
-                const chars = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'};
-                return chars[tag] || tag;
-            });
-        }
 
-        // Helper: relative time string
-        function getRelativeTimeString(timestamp) {
-            const now = Math.floor(Date.now() / 1000);
-            const diff = now - timestamp;
-            if (diff < 60) return 'just now';
-            if (diff < 3600) return Math.floor(diff/60) + 'm ago';
-            if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
-            if (diff < 604800) return Math.floor(diff/86400) + 'd ago';
-            return new Date(timestamp*1000).toLocaleDateString();
-        }
 
         // Event listeners
         window.addEventListener('DOMContentLoaded', () => {
@@ -1216,8 +1135,8 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
             el = document.getElementById('join-nostr-link'); if (el) el.addEventListener('click', openJoinNostr);
 
             el = document.getElementById('logout-btn'); if (el) el.addEventListener('click', logout);
-            el = document.getElementById('refresh-btn'); if (el) el.addEventListener('click', refreshFeed);
-            el = document.getElementById('reload-btn'); if (el) el.addEventListener('click', reloadPage);
+
+
             el = document.getElementById('cancel-reply-btn'); if (el) el.addEventListener('click', cancelReply);
             el = document.getElementById('post-reply-btn'); if (el) el.addEventListener('click', postReply);
             el = document.getElementById('close-about-btn'); if (el) el.addEventListener('click', closeAbout);
@@ -1254,12 +1173,7 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
 
 
 
-        // Add openReplyModalForEvent helper
-        function openReplyModalForEvent(eventId) {
-            // Optionally, you can prefill reply modal with context, or just open it
-            openReplyModal();
-            // You can add more logic here to show the note being replied to, etc.
-        }
+
 
         // Join Nostr modal
         function openJoinNostr() {
@@ -1307,4 +1221,4 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
     </script>
 </body>
 </html>
-<!-- konetik v0.1.3 - public open source -->
+<!-- konetik v0.1.4 - public open source -->
