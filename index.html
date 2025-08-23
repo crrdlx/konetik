@@ -1,4 +1,4 @@
-<!-- konetik v0.1.6 - initial public open source -->
+<!-- konetik v0.1.7 - initial public open source -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -105,7 +105,7 @@
             <span id="login-status" class="status"></span>
             <button id="menu-btn" style="margin-left:auto;">☰</button>
         </div>
-        <p><label><input type="checkbox" id="bridge-toggle" checked> <span id="bridge-label">Disable Nostr-to-Hive bridge</span></label></p>
+        <p><label><input type="checkbox" id="bridge-toggle" checked> <span id="bridge-label">Check box to disable Nostr-to-Hive bridge and post only to nostr</span></label></p>
         
         <!-- Added Hive posting preference options -->
         <div id="hive-preferences" style="margin-top: 10px; padding: 10px; border: 1px solid #333; border-radius: 5px;">
@@ -199,7 +199,7 @@
 
     <!-- Version Footer -->
     <footer>
-        <p class="info">konetik v0.1.6</p>
+        <p class="info">konetik v0.1.7</p>
     </footer>
 
     <!-- Notification UI removed -->
@@ -241,7 +241,7 @@
     </div>
 
     <script>
-        // konetik index.html v0.1.6 -->
+        // konetik index.html v0.1.7 -->
         // Core variables
         const relays = [
             'wss://relay.damus.io',
@@ -959,7 +959,7 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
                 permlink,
                 title: '',
                 body,
-                json_metadata: JSON.stringify({ tags: ['hostr', 'konetik', 'blog'], app: `konetik-blog/0.1.6` })
+                json_metadata: JSON.stringify({ tags: ['hostr', 'konetik', 'blog'], app: `konetik-blog/0.1.7` })
             };
             try {
                 await hiveClient.broadcast.comment(postOp, dhive.PrivateKey.fromString(hiveCredentials.postingKey));
@@ -999,11 +999,18 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
                     setTimeout(() => { updateBridgeStatus(); processQueue(); }, 2 * 60 * 1000);
                     return;
                 }
-                const body = `${post.content}
 
----
+                let usedFrontend;
+                if (hivePostingMode === 'alternate') {
+                    usedFrontend = frontEnds[frontEndIndex]; // Capture current frontend
+                } else if (hivePostingMode === 'snaps') {
+                    frontEndIndex = 0; // Always use snaps
+                    usedFrontend = 'snaps';
+                } else if (hivePostingMode === 'waves') {
+                    frontEndIndex = 1; // Always use waves
+                    usedFrontend = 'waves';
+                }
 
-Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](https://njump.me/${post.nevent}).`;
                 const postOp = {
                     parent_author: frontEnds[frontEndIndex] === 'snaps' ? 'peak.snaps' : 'ecency.waves',
                     parent_permlink: containerPermlink,
@@ -1011,7 +1018,7 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
                     permlink,
                     title: '',
                     body,
-                    json_metadata: JSON.stringify({ tags: ['hostr', `hostr-${frontEnds[frontEndIndex]}`], app: `konetik-${frontEnds[frontEndIndex]}/0.1.6` })
+                    json_metadata: JSON.stringify({ tags: ['hostr', `hostr-${frontEnds[frontEndIndex]}`], app: `konetik-${frontEnds[frontEndIndex]}/0.1.7` })
                 };
                 console.log(`Posting to Hive: ${permlink}`);
                 await hiveClient.broadcast.comment(postOp, dhive.PrivateKey.fromString(hiveCredentials.postingKey));
@@ -1021,15 +1028,11 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
                 if (hivePostingMode === 'alternate') {
                     frontEndIndex = (frontEndIndex + 1) % frontEnds.length;
                     localStorage.setItem('frontEndIndex', frontEndIndex);
-                } else if (hivePostingMode === 'snaps') {
-                    frontEndIndex = 0; // Always use snaps
-                } else if (hivePostingMode === 'waves') {
-                    frontEndIndex = 1; // Always use waves
                 }
                 
-                document.getElementById('bridge-status').innerHTML = `Bridge: Posted to ${frontEnds[frontEndIndex]}`;
+                document.getElementById('bridge-status').innerHTML = `Bridge: Posted to ${usedFrontend}`;
                 setTimeout(updateBridgeStatus, 2000);
-                console.log(`Posted to ${frontEnds[frontEndIndex]}: ${permlink}`);
+                console.log(`Posted to ${usedFrontend}: ${permlink}`);
             } catch (error) {
                 console.error('Error posting to Hive:', error.message);
                 postQueue.unshift(post);
@@ -1265,4 +1268,4 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
     </script>
 </body>
 </html>
-<!-- konetik v0.1.6 - public open source -->
+<!-- konetik v0.1.7 - public open source -->
