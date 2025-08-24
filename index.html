@@ -1,4 +1,4 @@
-<!-- konetik v0.1.9 - initial public open source -->
+<!-- konetik v0.1.10 - open source -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -193,10 +193,24 @@
     <div id="hive-setup-modal">
         <h2>hive bridge setup</h2>
         <p>You can post to Nostr now. However, credentials are needed to enable Nostr-to-Hive bridging. Not on Hive? <a href="#join-hive" id="join-hive-from-setup-link">Click here for options</a>.</p>
-        <input type="text" id="hive-username" placeholder="Hive username">
-        <input type="password" id="hive-posting-key" placeholder="Hive Posting Key (starts with 5)">
-        <button id="hive-posting-key-visibility-btn">👁️</button>
-        <p class="info">Your Hive Posting Key is stored in your browser.</p>
+        
+        <!-- Added Hive Keychain login option as preferred method -->
+        <div id="keychain-login-section">
+            <h3>Recommended: Login with Hive Keychain</h3>
+            <p class="info">Hive Keychain is a secure browser extension that keeps your keys safe.</p>
+            <input type="text" id="hive-username-keychain" placeholder="Hive username">
+            <button id="login-keychain-btn">Login with Keychain</button>
+            <p id="keychain-status" class="info"></p>
+        </div>
+        
+        <div id="posting-key-section">
+            <h3>Backup: Login with Posting Key</h3>
+            <input type="text" id="hive-username" placeholder="Hive username">
+            <input type="password" id="hive-posting-key" placeholder="Hive Posting Key (starts with 5)">
+            <button id="hive-posting-key-visibility-btn">👁️</button>
+            <p class="info">Your Hive Posting Key is stored in your browser.</p>
+        </div>
+        
         <p id="hive-error" class="error"></p>
         <button id="close-hive-btn">close</button>
         <button id="save-hive-btn">save</button>
@@ -220,7 +234,7 @@
 
     <!-- Version Footer -->
     <footer>
-        <p class="info">konetik v0.1.9</p>
+        <p class="info">konetik v0.1.10</p>
     </footer>
 
     <!-- Notification UI removed -->
@@ -262,7 +276,7 @@
     </div>
 
     <script>
-        // konetik index.html v0.1.9 -->
+        // konetik index.html v0.1.10 -->
         // Core variables
         const relays = [
             'wss://relay.damus.io',
@@ -299,7 +313,85 @@
         const FIVE_MINUTES_MS = 5 * 60 * 1000;
         const MAX_SHORTFORM_PER_DAY = 12;
 
+        let useKeychain = false;
+        let keychainUsername = '';
 
+        // Check if Hive Keychain is available
+        function checkKeychain() {
+            return new Promise((resolve) => {
+                if (window.hive_keychain) {
+                    resolve(true);
+                } else {
+                    // Wait a bit for extension to load
+                    setTimeout(() => {
+                        resolve(!!window.hive_keychain);
+                    }, 1000);
+                }
+            });
+        }
+
+        // Login with Hive Keychain
+        async function loginWithKeychain() {
+            const errorEl = document.getElementById('hive-error');
+            const statusEl = document.getElementById('keychain-status');
+            const username = document.getElementById('hive-username-keychain').value;
+            
+            if (!username) {
+                errorEl.textContent = 'Please enter your Hive username';
+                return;
+            }
+
+            const keychainAvailable = await checkKeychain();
+            if (!keychainAvailable) {
+                errorEl.textContent = 'Hive Keychain extension not found. Please install it or use posting key method.';
+                return;
+            }
+
+            statusEl.textContent = 'Requesting Keychain authentication...';
+            
+            // Request authentication from Keychain
+            const message = `Login to Konetik v0.1.10 at ${Date.now()}`;
+            
+            window.hive_keychain.requestSignBuffer(username, message, 'Posting', (response) => {
+                if (response.success) {
+                    useKeychain = true;
+                    keychainUsername = username;
+                    hiveCredentials = { username, useKeychain: true };
+                    
+                    // Save keychain preference
+                    saveToIndexedDB('hive', hiveCredentials);
+                    
+                    statusEl.textContent = 'Keychain authentication successful!';
+                    errorEl.textContent = '';
+                    closeHiveSetup();
+                    updateBridgeStatus();
+                    if (bridgeEnabled) processQueue();
+                } else {
+                    errorEl.textContent = 'Keychain authentication failed: ' + response.message;
+                    statusEl.textContent = '';
+                }
+            });
+        }
+
+        // Modified posting function to use Keychain when available
+        async function postToHiveWithKeychain(postOp) {
+            return new Promise((resolve, reject) => {
+                if (useKeychain && window.hive_keychain) {
+                    window.hive_keychain.requestPost(keychainUsername, postOp.title, postOp.body, postOp.parent_permlink, postOp.parent_author, postOp.json_metadata, postOp.permlink, '', (response) => {
+                        if (response.success) {
+                            resolve(response);
+                        } else {
+                            reject(new Error(response.message));
+                        }
+                    });
+                } else {
+                    // Fallback to posting key method
+                    hiveClient.broadcast.comment(postOp, dhive.PrivateKey.fromString(hiveCredentials.postingKey))
+                        .then(resolve)
+                        .catch(reject);
+                }
+            });
+        }
 
         // Login functions
         async function loginWithExtension() {
@@ -583,8 +675,9 @@
                 return;
             }
             try {
-                await saveToIndexedDB('hive', { username, postingKey });
-                hiveCredentials = { username, postingKey };
+                await saveToIndexedDB('hive', { username, postingKey, useKeychain: false });
+                hiveCredentials = { username, postingKey, useKeychain: false };
+                useKeychain = false;
                 errorEl.textContent = 'Credentials stored in your browser';
                 closeHiveSetup();
                 updateBridgeStatus();
@@ -753,16 +846,20 @@
             closeMenu();
             document.getElementById('hive-setup-modal').style.display = 'block';
             document.getElementById('hive-username').value = hiveCredentials?.username || '';
+            document.getElementById('hive-username-keychain').value = hiveCredentials?.username || '';
             document.getElementById('hive-posting-key').value = '';
             document.getElementById('hive-error').textContent = hiveCredentials ? 'Update or replace existing credentials' : '';
+            document.getElementById('keychain-status').textContent = '';
             showOverlay();
         }
 
         function closeHiveSetup() {
             document.getElementById('hive-setup-modal').style.display = 'none';
             document.getElementById('hive-username').value = '';
+            document.getElementById('hive-username-keychain').value = '';
             document.getElementById('hive-posting-key').value = '';
             document.getElementById('hive-error').textContent = '';
+            document.getElementById('keychain-status').textContent = '';
             hideOverlay();
         }
 
@@ -980,7 +1077,7 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
                 permlink,
                 title: '',
                 body,
-                json_metadata: JSON.stringify({ tags: ['hostr', 'konetik', 'blog'], app: `konetik-blog/0.1.9` })
+                json_metadata: JSON.stringify({ tags: ['hostr', 'konetik', 'blog'], app: `konetik-blog/0.1.10` })
             };
             try {
                 await hiveClient.broadcast.comment(postOp, dhive.PrivateKey.fromString(hiveCredentials.postingKey));
@@ -1046,11 +1143,11 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
                     permlink,
                     title: '',
                     body,
-                    json_metadata: JSON.stringify({ tags: ['hostr', `hostr-${frontEnds[frontEndIndex]}`], app: `konetik-${frontEnds[frontEndIndex]}/0.1.9` })
+                    json_metadata: JSON.stringify({ tags: ['hostr', `hostr-${frontEnds[frontEndIndex]}`], app: `konetik-${frontEnds[frontEndIndex]}/0.1.10` })
                 };
 
                 console.log(`Posting to Hive: ${permlink}`);
-                await hiveClient.broadcast.comment(postOp, dhive.PrivateKey.fromString(hiveCredentials.postingKey));
+                await postToHiveWithKeychain(postOp);
                 dailySnapCount++;
                 lastHivePostTime = now;
                 
@@ -1155,7 +1252,17 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
             });
         }
 
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Check for existing Hive credentials
+            const savedHive = await loadFromIndexedDB('hive');
+            if (savedHive && savedHive.useKeychain) {
+                useKeychain = true;
+                keychainUsername = savedHive.username;
+                hiveCredentials = savedHive;
+            }
+        });
 
+        document.getElementById('login-keychain-btn').addEventListener('click', loginWithKeychain);
 
         // Event listeners
         window.addEventListener('DOMContentLoaded', () => {
@@ -1297,4 +1404,4 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
     </script>
 </body>
 </html>
-<!-- konetik v0.1.9 - public open source -->
+<!-- konetik v0.1.10 - Hive Keychain login; alternate snaps/waves or choose -->

@@ -1,4 +1,4 @@
-<!-- konetik v0.1.8 - initial public open source -->
+<!-- konetik v0.1.9 - open source -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -73,6 +73,18 @@
             color: #ffd700;
           }
         }
+        /* Added CSS to make checkboxes and radio buttons inline with their labels */
+        input[type="checkbox"], input[type="radio"] {
+          width: auto;
+          display: inline;
+          margin-right: 8px;
+          vertical-align: middle;
+        }
+        label {
+          display: inline-flex;
+          align-items: center;
+          cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -106,11 +118,14 @@
             <button id="menu-btn" style="margin-left:auto;">☰</button>
         </div>
         
+        <!-- moved bridge status to appear after login status but before preferences -->
+        <p id="bridge-status" class="status">Bridge: Active</p>
+        
         <!-- Moved preferences section to be more prominent -->
         <!-- Bridge and Hive Posting Preferences -->
         <div style="margin: 10px 0; padding: 10px; border: 1px solid #333; border-radius: 5px; background: rgba(0,0,0,0.1);">
             <!-- moved checkbox before text for better alignment -->
-            <p><label><input type="checkbox" id="bridge-toggle" checked> <span id="bridge-label">Check box to disable Nostr-to-Hive bridge and post only to nostr</span></label></p>
+            <p><label><input type="checkbox" id="bridge-toggle" checked> <span id="bridge-label">Disable Nostr-to-Hive bridge</span></label></p>
             
             <div id="hive-preferences" style="margin-top: 10px;">
                 <p style="margin: 0 0 8px 0; font-weight: bold;">Hive Posting Preference:</p>
@@ -121,7 +136,7 @@
             </div>
         </div>
         
-        <p id="bridge-status" class="status">Bridge: Active</p>
+        <!-- removed duplicate bridge status line that was here -->
         <nav id="main-menu-nav" style="display:none;">
             <div id="menu-overlay"></div>
             <div id="menu">
@@ -205,7 +220,7 @@
 
     <!-- Version Footer -->
     <footer>
-        <p class="info">konetik v0.1.8</p>
+        <p class="info">konetik v0.1.9</p>
     </footer>
 
     <!-- Notification UI removed -->
@@ -247,7 +262,7 @@
     </div>
 
     <script>
-        // konetik index.html v0.1.8 -->
+        // konetik index.html v0.1.9 -->
         // Core variables
         const relays = [
             'wss://relay.damus.io',
@@ -965,7 +980,7 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
                 permlink,
                 title: '',
                 body,
-                json_metadata: JSON.stringify({ tags: ['hostr', 'konetik', 'blog'], app: `konetik-blog/0.1.8` })
+                json_metadata: JSON.stringify({ tags: ['hostr', 'konetik', 'blog'], app: `konetik-blog/0.1.9` })
             };
             try {
                 await hiveClient.broadcast.comment(postOp, dhive.PrivateKey.fromString(hiveCredentials.postingKey));
@@ -997,14 +1012,6 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
             const permlink = `konetik-${frontEnds[frontEndIndex]}-${Math.random().toString(36).substring(2)}`;
             console.log(`Processing post to ${frontEnds[frontEndIndex]}: ${post.eventId}`);
             try {
-                const containerPermlink = await getActiveContainer(frontEnds[frontEndIndex]);
-                if (!containerPermlink) {
-                    console.warn(`No valid ${frontEnds[frontEndIndex]} container found`);
-                    postQueue.unshift(post);
-                    document.getElementById('bridge-status').innerHTML = `Bridge: No ${frontEnds[frontEndIndex]} container`;
-                    setTimeout(() => { updateBridgeStatus(); processQueue(); }, 2 * 60 * 1000);
-                    return;
-                }
 
                 let usedFrontend;
                 if (hivePostingMode === 'alternate') {
@@ -1017,6 +1024,21 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
                     usedFrontend = 'waves';
                 }
 
+                const currentFrontend = frontEnds[frontEndIndex];
+                const containerPermlink = await getActiveContainer(currentFrontend);
+                if (!containerPermlink) {
+                    console.error(`No active ${currentFrontend} container found`);
+                    document.getElementById('bridge-status').innerHTML = `Bridge: No ${currentFrontend} container`;
+                    setTimeout(() => { updateBridgeStatus(); processQueue(); }, 2 * 60 * 1000);
+                    return;
+                }
+
+                const body = `${post.content}
+
+---
+
+Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](https://njump.me/${post.nevent}).`;
+
                 const postOp = {
                     parent_author: frontEnds[frontEndIndex] === 'snaps' ? 'peak.snaps' : 'ecency.waves',
                     parent_permlink: containerPermlink,
@@ -1024,8 +1046,9 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
                     permlink,
                     title: '',
                     body,
-                    json_metadata: JSON.stringify({ tags: ['hostr', `hostr-${frontEnds[frontEndIndex]}`], app: `konetik-${frontEnds[frontEndIndex]}/0.1.8` })
+                    json_metadata: JSON.stringify({ tags: ['hostr', `hostr-${frontEnds[frontEndIndex]}`], app: `konetik-${frontEnds[frontEndIndex]}/0.1.9` })
                 };
+
                 console.log(`Posting to Hive: ${permlink}`);
                 await hiveClient.broadcast.comment(postOp, dhive.PrivateKey.fromString(hiveCredentials.postingKey));
                 dailySnapCount++;
@@ -1274,4 +1297,4 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
     </script>
 </body>
 </html>
-<!-- konetik v0.1.8 - public open source -->
+<!-- konetik v0.1.9 - alternate snaps/waves or choose -->
