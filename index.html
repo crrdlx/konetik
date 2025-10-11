@@ -1,4 +1,4 @@
-<!-- konetik v0.1.10 - open source -->
+<!-- konetik v0.1.14 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -178,7 +178,6 @@
             <li>Basic post-to-Nostr functionality</li>
             <li>Auto-bridges Nostr-to-Hive as Snaps/Waves</li>
             <li>Installable PWA</li>
-            <li>Sleep mode to save resources/data</li>
             <li>Your keys never leave your browser</li>
         </ul>
         <p>Security: Your private keys (Nostr nsec and Hive posting key) are stored locally in your browser's IndexedDB. Keys never leave your browser and are never sent to any server. All operations (signing, posting, etc.) occur in your browser.</p>
@@ -234,7 +233,7 @@
 
     <!-- Version Footer -->
     <footer>
-        <p class="info">konetik v0.1.10</p>
+        <p class="info">konetik v0.1.14</p>
     </footer>
 
     <!-- Notification UI removed -->
@@ -251,7 +250,6 @@
         <h2>Note Length Warning</h2>
         <div id="note-length-message"></div>
         <div id="note-length-actions" style="margin-top:18px;"></div>
-        <button id="close-note-length-btn">Close and edit post</button>
     </div>
 
     <!-- But Why Modal -->
@@ -276,7 +274,7 @@
     </div>
 
     <script>
-        // konetik index.html v0.1.10 -->
+        // konetik index.html v0.1.14 -->
         // Core variables
         const relays = [
             'wss://relay.damus.io',
@@ -350,7 +348,7 @@
             statusEl.textContent = 'Requesting Keychain authentication...';
             
             // Request authentication from Keychain
-            const message = `Login to Konetik v0.1.10 at ${Date.now()}`;
+            const message = `Login to Konetik v0.1.14 at ${Date.now()}`;
             
             window.hive_keychain.requestSignBuffer(username, message, 'Posting', (response) => {
                 if (response.success) {
@@ -413,8 +411,6 @@
                 errorEl.textContent = 'Please install a Nostr extension (e.g., Alby, Nos2x, Gooti, etc.)';
             }
         }
-
-
 
         async function loginWithNsec() {
             const errorEl = document.getElementById('login-error');
@@ -875,6 +871,26 @@
             hideOverlay();
         }
 
+        function openJoinNostr() {
+            document.getElementById('join-nostr-modal').style.display = 'block';
+            showOverlay();
+        }
+
+        function closeJoinNostr() {
+            document.getElementById('join-nostr-modal').style.display = 'none';
+            hideOverlay();
+        }
+
+        function openButWhy() {
+            document.getElementById('but-why-modal').style.display = 'block';
+            showOverlay();
+        }
+
+        function closeButWhy() {
+            document.getElementById('but-why-modal').style.display = 'none';
+            hideOverlay();
+        }
+
         // Note length/character count logic
         let noteLengthState = { over400: false, over480: false };
         let over480Mode = null; // Tracks user choice for over-480-char notes
@@ -941,7 +957,6 @@
             document.getElementById('note-length-modal').style.display = 'none';
             hideOverlay();
         }
-        document.getElementById('close-note-length-btn').onclick = closeNoteLengthModal;
 
         async function postNote(mode) {
             const content = document.getElementById('note-content').value;
@@ -951,457 +966,317 @@
                 errorEl.textContent = 'Please enter note content';
                 return;
             }
-            const count = content.length;
-            if (count >= 480) {
-                // If no mode set, show modal and return
-                if (!over480Mode) {
-                    showNoteLengthModal(
-                      `<b>Your note is too long for snaps/waves (short form) bridging (limit: 480 chars).</b><br><br>` +
-                      `You can:<br>` +
-                      `1. <b>Post to Nostr only</b> (will not be bridged to Hive short form)<br>` +
-                      `2. <b>Post to Nostr and as a Hive top-level post</b> (will appear in your Hive blog)<br>` +
-                      `<span style='color:#b00;'>Note: Hive discourages posting more than 2 top-level posts per day. Excessive posting may be seen as spam.</span><br><br>` +
-                      `3. <b>Cancel</b> (do not post)`
-                    , true);
-                    return;
-                }
-                // If mode is set, show modal again for confirmation
-                showNoteLengthModal(
-                  `<b>Are you sure?</b><br><br>` +
-                  (over480Mode === 'nostr-only'
-                    ? `You are about to post this note to Nostr only (it will NOT be bridged to Hive short form).`
-                    : `You are about to post this note to Nostr and as a Hive top-level post (it will appear in your Hive blog).`)
-                  + `<br><br>Click the same option again to confirm, or edit your note to change.`
-                  , true);
-                // On confirm, actually post
-                setTimeout(() => {
-                  if (over480Mode === 'nostr-only') {
-                    document.getElementById('note-length-nostr-only-btn').onclick = async () => {
-                      closeNoteLengthModal();
-                      await actuallyPostNote('nostr-only');
-                    };
-                  } else if (over480Mode === 'hive-top') {
-                    document.getElementById('note-length-hive-top-btn').onclick = async () => {
-                      closeNoteLengthModal();
-                      await actuallyPostNote('hive-top');
-                    };
-                  }
-                  document.getElementById('note-length-cancel-btn').onclick = () => { closeNoteLengthModal(); };
-                }, 0);
+
+            const nostrContent = content + '\n\nPosted with https://konetik.vercel.app';
+
+            // Check for over-480 mode
+            if (content.length >= 480 && !over480Mode) {
+                errorEl.textContent = 'Note too long. Please choose an option from the alert.';
                 return;
             }
-            // If under 480 chars, post as normal
-            await actuallyPostNote(mode);
+
+            const finalMode = over480Mode || mode || 'normal';
+            console.log(`Posting note with mode: ${finalMode}`);
+
+            try {
+                hideNoteForm();
+                await actuallyPostNote(nostrContent, finalMode);
+                clearNoteForm();
+                showPostInfoModal('Note posted successfully!');
+            } catch (error) {
+                console.error('Post failed:', error);
+                errorEl.textContent = 'Post failed: ' + error.message;
+                showNoteForm();
+            }
         }
 
-        async function actuallyPostNote(mode) {
-            const content = document.getElementById('note-content').value;
-            const errorEl = document.getElementById('note-error');
-            errorEl.textContent = '';
-            const count = content.length;
+        async function actuallyPostNote(content, mode) {
+            console.log(`actuallyPostNote called with mode: ${mode}`);
+            
+            // Create and sign Nostr event
             const event = {
                 kind: 1,
+                pubkey: nostrPubkey,
                 created_at: Math.floor(Date.now() / 1000),
-                tags: [], // Hashtags can be added here in the future, e.g. [['t', 'example']]
-                content,
-                pubkey: nostrPubkey
+                tags: [],
+                content: content
             };
-            try {
-                let signedEvent;
-                if (window.nostr) {
-                    signedEvent = await window.nostr.signEvent(event);
-                } else if (nsec) {
-                    signedEvent = NostrTools.finalizeEvent(event, NostrTools.nip19.decode(nsec).data);
-                } else {
-                    throw new Error('No signing method available');
+
+            let signedEvent;
+            if (window.nostr && !nsec) {
+                signedEvent = await window.nostr.signEvent(event);
+            } else if (nsec) {
+                const privateKey = NostrTools.nip19.decode(nsec).data;
+                event.id = NostrTools.getEventHash(event);
+                event.sig = NostrTools.getSignature(event, privateKey);
+                signedEvent = event;
+            } else {
+                throw new Error('No signing method available');
+            }
+
+            // Post to Nostr
+            const pool = new NostrTools.SimplePool();
+            const activeRelays = [];
+            for (const relay of relays) {
+                try {
+                    await pool.ensureRelay(relay);
+                    activeRelays.push(relay);
+                } catch (e) {
+                    console.warn(`Failed to connect to ${relay}: ${e.message}`);
                 }
-                const pool = new NostrTools.SimplePool();
-                const activeRelays = [];
-                for (const relay of relays) {
-                    const connected = await tryConnect(pool, relay);
-                    if (connected) activeRelays.push(relay);
-                }
-                if (activeRelays.length === 0) {
-                    throw new Error('No relays available for publishing');
-                }
-                const kind1Relays = activeRelays.filter(r => r !== 'wss://purplepag.es');
-                if (kind1Relays.length === 0) {
-                    throw new Error('No relays available for kind 1');
-                }
-                console.log('Publishing to kind 1 relays:', kind1Relays);
-                await pool.publish(kind1Relays, signedEvent);
-                let message = 'Note broadcasted to Nostr';
-                // If over 480 chars, only post to Hive as top-level if selected
-                if (count < 480 && bridgeEnabled && hiveCredentials && hiveClient) {
-                    const nevent = NostrTools.nip19.neventEncode({ id: signedEvent.id, relays: kind1Relays });
-                    postQueue.push({ content, eventId: signedEvent.id, nevent, kind: 1 });
-                    processQueue();
-                    message += ' and queued for Hive bridging';
-                } else if (mode === 'hive-top' && bridgeEnabled && hiveCredentials && hiveClient) {
-                    // Post as Hive top-level post
-                    await postToHiveTopLevel(content, signedEvent);
-                    message += ' and posted as Hive top-level post';
-                } else if (count < 480 && bridgeEnabled && !hiveClient) {
-                    console.warn('Cannot bridge: Hive library not loaded');
-                    message += ' (Hive bridging unavailable)';
-                    errorEl.textContent = 'Cannot bridge: Hive library not loaded';
-                } else if (count < 480 && bridgeEnabled && !hiveCredentials) {
-                    console.warn('Cannot bridge: Hive credentials missing');
-                    message += ' (Hive credentials missing)';
-                    errorEl.textContent = 'Cannot bridge: Hive credentials missing';
-                } else if (count >= 480 && mode === 'nostr-only') {
-                    message += ' (not bridged to Hive)';
-                }
-                showPostInfoModal(message);
-                hideNoteForm();
-                over480Mode = null; // Reset after posting
-            } catch (error) {
-                errorEl.textContent = 'Failed to post: ' + error.message;
+            }
+
+            if (activeRelays.length === 0) {
+                throw new Error('No Nostr relays available');
+            }
+
+            await Promise.all(pool.publish(activeRelays, signedEvent));
+            console.log('Posted to Nostr successfully');
+
+            // Handle Hive posting based on mode
+            if (mode === 'nostr-only') {
+                console.log('Nostr-only mode, skipping Hive');
+                return;
+            }
+
+            if (mode === 'hive-top') {
+                console.log('Posting to Hive as top-level post');
+                await postToHiveTopLevel(content, signedEvent);
+                return;
+            }
+
+            // Normal bridging mode
+            if (bridgeEnabled && hiveCredentials && hiveClient) {
+                console.log('Adding to bridge queue');
+                postQueue.push({ content, signedEvent, timestamp: Date.now() });
+                await processQueue();
             }
         }
 
         async function postToHiveTopLevel(content, signedEvent) {
-            // Post as a top-level Hive post (blog)
-            if (!hiveCredentials || !hiveClient) return;
-            const permlink = `konetik-blog-${Math.random().toString(36).substring(2)}`;
-            // Add a horizontal rule and two newlines before the footer
-            const body = `${content}
+            if (!hiveClient || !hiveCredentials) {
+                throw new Error('Hive not configured');
+            }
 
----
-
-Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](https://njump.me/${signedEvent.id}).`;
+            const permlink = `konetik-${Date.now()}`;
+            const title = content.length > 50 ? content.substring(0, 50) + '...' : content;
+            
             const postOp = {
-                parent_author: '',
-                parent_permlink: 'hive-150329', // General tag for social/blog
                 author: hiveCredentials.username,
-                permlink,
-                title: '',
-                body,
-                json_metadata: JSON.stringify({ tags: ['hostr', 'konetik', 'blog'], app: `konetik-blog/0.1.10` })
+                title: title,
+                body: content,
+                parent_author: '',
+                parent_permlink: 'konetik',
+                permlink: permlink,
+                json_metadata: JSON.stringify({
+                    tags: ['konetik', 'nostr'],
+                    app: 'konetik/0.1.14',
+                    nostr_event_id: signedEvent.id
+                })
             };
-            try {
-                await hiveClient.broadcast.comment(postOp, dhive.PrivateKey.fromString(hiveCredentials.postingKey));
-            } catch (error) {
-                showPostInfoModal('Failed to post to Hive blog: ' + error.message);
-            }
+
+            await postToHiveWithKeychain(postOp);
+            console.log('Posted to Hive as top-level post');
         }
 
-        // Queue processing for Hive
         async function processQueue() {
-            if (!bridgeEnabled || postQueue.length === 0 || !hiveCredentials || !hiveClient) {
-                updateBridgeStatus();
+            if (!bridgeEnabled || !hiveCredentials || !hiveClient || postQueue.length === 0) {
                 return;
             }
+
             resetDailyCounts();
-            if (dailySnapCount >= MAX_SHORTFORM_PER_DAY) {
-                document.getElementById('bridge-status').innerHTML = `Bridge: Daily limit reached (${MAX_SHORTFORM_PER_DAY})`;
-                setTimeout(() => { updateBridgeStatus(); processQueue(); }, 24 * 60 * 60 * 1000);
-                return;
-            }
             const now = Date.now();
+            
             if (now - lastHivePostTime < FIVE_MINUTES_MS) {
-                const waitTime = FIVE_MINUTES_MS - (now - lastHivePostTime);
-                document.getElementById('bridge-status').innerHTML = `Bridge: Waiting ${Math.round(waitTime / 1000)}s`;
-                setTimeout(() => { updateBridgeStatus(); processQueue(); }, waitTime);
+                console.log('Rate limiting: waiting before next Hive post');
+                setTimeout(processQueue, FIVE_MINUTES_MS - (now - lastHivePostTime));
                 return;
             }
+
+            if (dailySnapCount >= MAX_SHORTFORM_PER_DAY) {
+                console.log('Daily limit reached for short form posts');
+                return;
+            }
+
             const post = postQueue.shift();
-            const permlink = `konetik-${frontEnds[frontEndIndex]}-${Math.random().toString(36).substring(2)}`;
-            console.log(`Processing post to ${frontEnds[frontEndIndex]}: ${post.eventId}`);
             try {
-
-                let usedFrontend;
-                if (hivePostingMode === 'alternate') {
-                    usedFrontend = frontEnds[frontEndIndex]; // Capture current frontend
-                } else if (hivePostingMode === 'snaps') {
-                    frontEndIndex = 0; // Always use snaps
-                    usedFrontend = 'snaps';
-                } else if (hivePostingMode === 'waves') {
-                    frontEndIndex = 1; // Always use waves
-                    usedFrontend = 'waves';
-                }
-
-                const currentFrontend = frontEnds[frontEndIndex];
-                const containerPermlink = await getActiveContainer(currentFrontend);
-                if (!containerPermlink) {
-                    console.error(`No active ${currentFrontend} container found`);
-                    document.getElementById('bridge-status').innerHTML = `Bridge: No ${currentFrontend} container`;
-                    setTimeout(() => { updateBridgeStatus(); processQueue(); }, 2 * 60 * 1000);
-                    return;
-                }
-
-                const body = `${post.content}
-
----
-
-Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](https://njump.me/${post.nevent}).`;
-
-                const postOp = {
-                    parent_author: frontEnds[frontEndIndex] === 'snaps' ? 'peak.snaps' : 'ecency.waves',
-                    parent_permlink: containerPermlink,
-                    author: hiveCredentials.username,
-                    permlink,
-                    title: '',
-                    body,
-                    json_metadata: JSON.stringify({ tags: ['hostr', `hostr-${frontEnds[frontEndIndex]}`], app: `konetik-${frontEnds[frontEndIndex]}/0.1.10` })
-                };
-
-                console.log(`Posting to Hive: ${permlink}`);
-                await postToHiveWithKeychain(postOp);
-                dailySnapCount++;
+                await postToHive(post.content, post.signedEvent);
                 lastHivePostTime = now;
+                dailySnapCount++;
+                console.log(`Posted to Hive. Daily count: ${dailySnapCount}`);
                 
-                if (hivePostingMode === 'alternate') {
-                    frontEndIndex = (frontEndIndex + 1) % frontEnds.length;
-                    localStorage.setItem('frontEndIndex', frontEndIndex);
+                if (postQueue.length > 0) {
+                    setTimeout(processQueue, FIVE_MINUTES_MS);
                 }
-                
-                document.getElementById('bridge-status').innerHTML = `Bridge: Posted to ${usedFrontend}`;
-                setTimeout(updateBridgeStatus, 2000);
-                console.log(`Posted to ${usedFrontend}: ${permlink}`);
             } catch (error) {
-                console.error('Error posting to Hive:', error.message);
-                postQueue.unshift(post);
-                document.getElementById('bridge-status').innerHTML = `Bridge: Error posting`;
-                setTimeout(updateBridgeStatus, 2000);
-                setTimeout(processQueue, 2 * 60 * 1000);
-            }
-            if (postQueue.length > 0) setTimeout(processQueue, 100);
-        }
-
-        // UI interactions
-        function showNoteForm() {
-            document.getElementById('note-form-section').style.display = 'block';
-            document.getElementById('note-content').value = '';
-            document.getElementById('note-error').textContent = '';
-            handleNoteInput();
-        }
-        function hideNoteForm() {
-            document.getElementById('note-form-section').style.display = 'none';
-        }
-        function openReplyModal() { document.getElementById('reply-modal').style.display = 'block'; }
-        function closeReplyModal() { document.getElementById('reply-modal').style.display = 'none'; }
-        function cancelReply() { closeReplyModal(); }
-        function postReply() { alert('Reply not implemented'); closeReplyModal(); }
-
-
-
-        async function logout() {
-            closeMenu();
-            nostrPubkey = null;
-            hiveCredentials = null;
-            nsec = null;
-            sessionPassphrase = null;
-            bridgeEnabled = true;
-            postQueue = [];
-            document.getElementById('login-section').style.display = 'block';
-            document.getElementById('app-section').style.display = 'none';
-            document.getElementById('bridge-status').textContent = 'Bridge: Active';
-            document.getElementById('bridge-toggle').checked = true;
-            document.getElementById('bridge-label').textContent = 'Disable Nostr-to-Hive bridge';
-            document.getElementById('login-status').textContent = '';
-
-            try {
-                const db = await new Promise((resolve, reject) => {
-                    const request = indexedDB.open('konetik', 1);
-                    request.onsuccess = () => resolve(request.result);
-                    request.onerror = () => reject(request.error);
-                });
-                const tx = db.transaction(['credentials'], 'readwrite');
-                const store = tx.objectStore('credentials');
-                await new Promise((resolve, reject) => {
-                    const request = store.clear();
-                    request.onsuccess = () => resolve();
-                    request.onerror = () => reject(request.error);
-                });
-                db.close();
-            } catch (error) {
-                console.error('Failed to clear IndexedDB:', error);
+                console.error('Hive posting failed:', error);
+                postQueue.unshift(post); // Put it back at the front
+                setTimeout(processQueue, FIVE_MINUTES_MS);
             }
         }
 
-        // Handle dhive loading
-        let dhive = null;
-        let hiveClient = null;
+        async function postToHive(content, signedEvent) {
+            const frontEnd = determineFrontEnd();
+            const container = await getActiveContainer(frontEnd);
+            
+            if (!container) {
+                throw new Error(`No active ${frontEnd} container found`);
+            }
 
-        async function loadDhiveFallback() {
-            const dhiveFallback = document.getElementById('dhive-fallback');
-            return new Promise((resolve, reject) => {
-                console.log('Attempting to load dhive from /dhive.js');
-                dhiveFallback.src = '/dhive.js';
-                dhiveFallback.onload = () => {
-                    dhive = window.dhive;
-                    if (dhive) {
-                        hiveClient = new dhive.Client('https://api.hive.blog');
-                        console.log('dhive loaded successfully from fallback');
-                        updateBridgeStatus();
-                        resolve();
-                    } else {
-                        console.error('dhive failed to load to window.dhive');
-                        document.getElementById('hive-error').textContent = 'Hive library failed to load. Bridging disabled.';
-                        updateBridgeStatus();
-                        reject(new Error('dhive fallback failed'));
-                    }
-                };
-                dhiveFallback.onerror = () => {
-                    console.error('Failed to load dhive from /dhive.js');
-                    document.getElementById('hive-error').textContent = 'Hive library failed to load. Bridging disabled.';
-                    updateBridgeStatus();
-                    reject(new Error('dhive fallback load error'));
-                };
-            });
+            const permlink = `re-${frontEnd === 'snaps' ? 'peak-snaps' : 'ecency-waves'}-${Date.now()}`;
+            const parentAuthor = frontEnd === 'snaps' ? 'peak.snaps' : 'ecency.waves';
+            
+            const postOp = {
+                author: hiveCredentials.username,
+                title: '',
+                body: content,
+                parent_author: parentAuthor,
+                parent_permlink: container,
+                permlink: permlink,
+                json_metadata: JSON.stringify({
+                    tags: [frontEnd === 'snaps' ? 'peak.snaps' : 'ecency.waves'],
+                    app: 'konetik/0.1.14',
+                    nostr_event_id: signedEvent.id
+                })
+            };
+
+            await postToHiveWithKeychain(postOp);
+            console.log(`Posted to ${frontEnd} successfully`);
         }
 
-        document.addEventListener('DOMContentLoaded', async () => {
-            // Check for existing Hive credentials
-            const savedHive = await loadFromIndexedDB('hive');
-            if (savedHive && savedHive.useKeychain) {
-                useKeychain = true;
-                keychainUsername = savedHive.username;
-                hiveCredentials = savedHive;
-            }
-        });
-
-        document.getElementById('login-keychain-btn').addEventListener('click', loginWithKeychain);
-
-        // Event listeners
-        window.addEventListener('DOMContentLoaded', () => {
-            const dhiveScript = document.getElementById('dhive-script');
-            if (dhiveScript) {
-                dhiveScript.onload = () => {
-                    dhive = window.dhive;
-                    if (dhive) {
-                        hiveClient = new dhive.Client('https://api.hive.blog');
-                        console.log('dhive loaded from primary source (CDN)');
-                        updateBridgeStatus();
-                    } else {
-                        console.error('dhive failed to attach to window.dhive');
-                        loadDhiveFallback();
-                    }
-                };
-                dhiveScript.onerror = () => {
-                    console.error('Failed to load dhive from CDN, retrying...');
-                    setTimeout(() => {
-                        initHiveClient();
-                    }, 1000);
-                };
-            } else {
-                console.error('dhive-script element not found');
-                loadDhiveFallback();
-            }
-
-            // Register service worker for PWA
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('/sw.js').then(reg => {
-                    console.log('Service Worker registered:', reg);
-                }).catch(err => {
-                    console.error('Service Worker registration failed:', err);
-                });
-            }
-
-            // Bind event listeners
-            var el;
-            el = document.getElementById('login-extension-btn'); if (el) el.addEventListener('click', loginWithExtension);
-            el = document.getElementById('nsec-visibility-btn'); if (el) el.addEventListener('click', toggleNsecVisibility);
-            el = document.getElementById('hive-posting-key-visibility-btn'); if (el) el.addEventListener('click', toggleHivePostingKeyVisibility);
-            el = document.getElementById('login-nsec-btn'); if (el) el.addEventListener('click', loginWithNsec);
-            el = document.getElementById('save-hive-btn'); if (el) el.addEventListener('click', saveHiveCredentials);
-            el = document.getElementById('close-hive-btn'); if (el) el.addEventListener('click', closeHiveSetup);
-            el = document.getElementById('bridge-toggle'); if (el) el.addEventListener('change', toggleBridge);
-            el = document.getElementById('note-btn'); if (el) el.addEventListener('click', showNoteForm);
-            el = document.getElementById('menu-btn'); if (el) el.addEventListener('pointerdown', openMenu);
-            document.querySelectorAll('#about-link').forEach(link => link.addEventListener('click', openAbout));
-            el = document.getElementById('security-home-link'); if (el) el.addEventListener('click', openSecurity);
-            el = document.getElementById('hive-setup-link'); if (el) el.addEventListener('click', openHiveSetup);
-            el = document.getElementById('join-hive-link'); if (el) el.addEventListener('click', openJoinHive);
-            el = document.getElementById('join-hive-from-setup-link'); if (el) el.addEventListener('click', openJoinHive);
-            el = document.getElementById('join-nostr-link'); if (el) el.addEventListener('click', openJoinNostr);
-
-            el = document.getElementById('logout-btn'); if (el) el.addEventListener('click', logout);
-
-
-            el = document.getElementById('cancel-reply-btn'); if (el) el.addEventListener('click', cancelReply);
-            el = document.getElementById('post-reply-btn'); if (el) el.addEventListener('click', postReply);
-            el = document.getElementById('close-about-btn'); if (el) el.addEventListener('click', closeAbout);
-            el = document.getElementById('close-join-hive-btn'); if (el) el.addEventListener('click', closeJoinHive);
-            el = document.getElementById('close-join-nostr-btn'); if (el) el.addEventListener('click', closeJoinNostr);
-            el = document.getElementById('close-post-info-btn'); if (el) el.addEventListener('click', closePostInfoModal);
-
-            el = document.getElementById('close-menu-btn'); if (el) el.addEventListener('click', closeMenu);
-            el = document.getElementById('menu-overlay'); if (el) el.addEventListener('click', function() {
-                // Close any open modal/info popup or menu
-                closeMenu();
-                closeAbout();
-                closeSecurity();
-                closeHiveSetup();
-                closeJoinHive();
-                closeJoinNostr();
-                closePostInfoModal();
-            });
-            el = document.getElementById('clear-note-btn'); if (el) el.addEventListener('click', clearNoteForm);
-            el = document.getElementById('post-note-btn'); if (el) el.addEventListener('click', () => postNote());
-            el = document.getElementById('but-why-link'); if (el) el.addEventListener('click', openButWhy);
-            el = document.getElementById('close-but-why-btn'); if (el) el.addEventListener('click', closeButWhy);
-            el = document.getElementById('about-but-why-link'); if (el) el.addEventListener('click', function(e) { e.preventDefault(); closeAbout(); document.getElementById('but-why-modal').style.display = 'block'; showOverlay(); });
-            el = document.getElementById('return-home-btn'); if (el) el.addEventListener('click', returnToHome);
-            el = document.getElementById('konetik-title'); if (el) el.addEventListener('click', returnToHome);
-        });
-
-
-
-
-
-
-
-
-
-
-
-
-        // Join Nostr modal
-        function openJoinNostr() {
-            closeMenu();
-            closeHiveSetup();
-            document.getElementById('join-nostr-modal').style.display = 'block';
-            showOverlay();
-        }
-        function closeJoinNostr() {
-            document.getElementById('join-nostr-modal').style.display = 'none';
-            hideOverlay();
+        function determineFrontEnd() {
+            if (hivePostingMode === 'snaps') return 'snaps';
+            if (hivePostingMode === 'waves') return 'waves';
+            
+            // Alternate mode
+            const frontEnd = frontEnds[frontEndIndex];
+            frontEndIndex = (frontEndIndex + 1) % frontEnds.length;
+            localStorage.setItem('frontEndIndex', frontEndIndex.toString());
+            return frontEnd;
         }
 
         function clearNoteForm() {
             document.getElementById('note-content').value = '';
+            document.getElementById('note-char-count').textContent = '0/480';
             document.getElementById('note-error').textContent = '';
-            handleNoteInput();
-        }
-        document.getElementById('clear-note-btn').onclick = clearNoteForm;
-
-        function openButWhy() {
-            closeMenu && closeMenu();
-            document.getElementById('but-why-modal').style.display = 'block';
-            showOverlay && showOverlay();
-        }
-        function closeButWhy() {
-            document.getElementById('but-why-modal').style.display = 'none';
-            hideOverlay && hideOverlay();
+            noteLengthState = { over400: false, over480: false };
+            over480Mode = null;
         }
 
-        function returnToHome() {
-            // Hide all modals and overlays
-            closeMenu && closeMenu();
-            closeAbout && closeAbout();
-            closeSecurity && closeSecurity();
-            closeHiveSetup && closeHiveSetup();
-            closeJoinHive && closeJoinHive();
-            closeJoinNostr && closeJoinNostr();
-            closePostInfoModal && closePostInfoModal();
-            // Show main app section
-            document.getElementById('app-section').style.display = 'block';
-            // Optionally, show the note form
-            showNoteForm && showNoteForm();
+        function showNoteForm() {
+            document.getElementById('note-form-section').style.display = 'block';
         }
+
+        function hideNoteForm() {
+            document.getElementById('note-form-section').style.display = 'none';
+        }
+
+        async function logout() {
+            try {
+                await new Promise((resolve, reject) => {
+                    const request = indexedDB.deleteDatabase('konetik');
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => reject(request.error);
+                });
+            } catch (error) {
+                console.warn('Failed to clear database:', error);
+            }
+            
+            nostrPubkey = null;
+            hiveCredentials = null;
+            nsec = null;
+            postQueue = [];
+            
+            document.getElementById('app-section').style.display = 'none';
+            document.getElementById('login-section').style.display = 'block';
+            document.getElementById('nsec-input').value = '';
+            document.getElementById('login-error').textContent = '';
+            closeMenu();
+        }
+
+        async function loadDhiveFallback() {
+            console.warn('Loading dhive fallback');
+            const fallbackScript = document.getElementById('dhive-fallback');
+            fallbackScript.innerHTML = `
+                console.warn('Using dhive fallback - limited functionality');
+                window.dhive = null;
+                window.hiveClient = null;
+            `;
+            updateBridgeStatus();
+        }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Initialize preferences
+            initializePreferences();
+            
+            // Login event listeners
+            document.getElementById('login-extension-btn').onclick = loginWithExtension;
+            document.getElementById('login-nsec-btn').onclick = loginWithNsec;
+            document.getElementById('nsec-visibility-btn').onclick = toggleNsecVisibility;
+            
+            // App event listeners
+            document.getElementById('menu-btn').onclick = openMenu;
+            document.getElementById('close-menu-btn').onclick = closeMenu;
+            document.getElementById('menu-overlay').onclick = closeMenu;
+            document.getElementById('logout-btn').onclick = logout;
+            
+            // Note form event listeners
+            document.getElementById('post-note-btn').onclick = () => postNote();
+            document.getElementById('clear-note-btn').onclick = clearNoteForm;
+            
+            // Modal event listeners
+            document.getElementById('about-link').onclick = (e) => { e.preventDefault(); openAbout(); };
+            document.getElementById('close-about-btn').onclick = closeAbout;
+            document.getElementById('about-but-why-link').onclick = (e) => { e.preventDefault(); closeAbout(); openButWhy(); };
+            
+            document.getElementById('hive-setup-link').onclick = (e) => { e.preventDefault(); openHiveSetup(); };
+            document.getElementById('close-hive-btn').onclick = closeHiveSetup;
+            document.getElementById('save-hive-btn').onclick = saveHiveCredentials;
+            document.getElementById('login-keychain-btn').onclick = loginWithKeychain;
+            document.getElementById('hive-posting-key-visibility-btn').onclick = toggleHivePostingKeyVisibility;
+            
+            document.getElementById('join-hive-link').onclick = (e) => { e.preventDefault(); openJoinHive(); };
+            document.getElementById('join-hive-from-setup-link').onclick = (e) => { e.preventDefault(); openJoinHive(); };
+            document.getElementById('close-join-hive-btn').onclick = closeJoinHive;
+            
+            document.getElementById('join-nostr-link').onclick = (e) => { e.preventDefault(); openJoinNostr(); };
+            document.getElementById('close-join-nostr-btn').onclick = closeJoinNostr;
+            
+            document.getElementById('but-why-link').onclick = (e) => { e.preventDefault(); openButWhy(); };
+            document.getElementById('close-but-why-btn').onclick = closeButWhy;
+            
+            document.getElementById('close-post-info-btn').onclick = closePostInfoModal;
+            document.getElementById('return-home-btn').onclick = closePostInfoModal;
+            
+            // Bridge toggle
+            document.getElementById('bridge-toggle').onchange = toggleBridge;
+            
+            // Title click to refresh
+            document.getElementById('konetik-title').onclick = () => location.reload();
+            
+            // Try to auto-login
+            try {
+                const savedNsec = await loadFromIndexedDB('nsec');
+                if (savedNsec) {
+                    nsec = savedNsec;
+                    nostrPubkey = NostrTools.getPublicKey(NostrTools.nip19.decode(savedNsec).data);
+                    const hiveData = await loadFromIndexedDB('hive');
+                    if (hiveData) {
+                        hiveCredentials = hiveData;
+                        if (hiveData.useKeychain) {
+                            useKeychain = true;
+                            keychainUsername = hiveData.username;
+                        }
+                    }
+                    await updateLoginStatus();
+                    await showApp();
+                }
+            } catch (error) {
+                console.error('Auto-login failed:', error);
+            }
+        });
     </script>
 </body>
 </html>
-<!-- konetik v0.1.10 - Hive Keychain login; alternate snaps/waves or choose -->
+<!-- konetik v0.1.14 -->
