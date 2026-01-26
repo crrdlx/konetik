@@ -125,7 +125,7 @@
         <!-- Bridge and Hive Posting Preferences -->
         <div style="margin: 10px 0; padding: 10px; border: 1px solid #333; border-radius: 5px; background: rgba(0,0,0,0.1);">
             <!-- moved checkbox before text for better alignment -->
-            <p><label><input type="checkbox" id="bridge-toggle" checked> <span id="bridge-label">Disable Nostr-to-Hive bridge</span></label></p>
+            <p><label><input type="checkbox" id="bridge-toggle" checked> <span id="bridge-label">Uncheck to disable Nostr-to-Hive bridge</span></label></p>
             
             <div id="hive-preferences" style="margin-top: 10px;">
                 <p style="margin: 0 0 8px 0; font-weight: bold;">Hive Posting Preference:</p>
@@ -1101,7 +1101,7 @@ Bridged via [konetik](https://konetik.vercel.app), view [original on Nostr](http
             document.getElementById('app-section').style.display = 'none';
             document.getElementById('bridge-status').textContent = 'Bridge: Active';
             document.getElementById('bridge-toggle').checked = true;
-            document.getElementById('bridge-label').textContent = 'Disable Nostr-to-Hive bridge';
+            document.getElementById('bridge-label').textContent = 'Uncheck to disable Nostr-to-Hive bridge';
             document.getElementById('login-status').textContent = '';
 
             try {
