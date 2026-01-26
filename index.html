@@ -628,7 +628,7 @@
 
         function toggleBridge() {
             bridgeEnabled = document.getElementById('bridge-toggle').checked;
-            document.getElementById('bridge-label').textContent = bridgeEnabled ? 'Disable Nostr-to-Hive bridge' : 'Enable Nostr-to-Hive bridge';
+            document.getElementById('bridge-label').textContent = bridgeEnabled ? 'Uncheck to disable Nostr-to-Hive bridge' : 'Enable Nostr-to-Hive bridge';
             updateBridgeStatus();
             if (bridgeEnabled) processQueue();
         }
